@@ -102,9 +102,25 @@ pub async fn start_service(
         let app_out = app_clone.clone();
         std::thread::spawn(move || {
             let reader = BufReader::new(stdout);
+            let mut browser_opened = false;
             for line in reader.lines() {
                 if let Ok(line) = line {
                     let level = classify_log_level(&line);
+
+                    // Auto-open browser when service is ready
+                    if !browser_opened && is_service_ready_signal(&line) {
+                        browser_opened = true;
+                        let app_browser = app_out.clone();
+                        std::thread::spawn(move || {
+                            std::thread::sleep(std::time::Duration::from_secs(2));
+                            let _ = app_browser.emit("service-log", serde_json::json!({
+                                "level": "success",
+                                "message": "🌐 正在打开浏览器..."
+                            }));
+                            let _ = open::that("http://localhost:3000");
+                        });
+                    }
+
                     let _ = app_out.emit("service-log", serde_json::json!({
                         "level": level,
                         "message": line
@@ -170,9 +186,16 @@ fn classify_log_level(line: &str) -> &'static str {
         "error"
     } else if lower.contains("warn") {
         "warn"
-    } else if lower.contains("listening") || lower.contains("started") || lower.contains("ready") || lower.contains("success") {
+    } else if is_service_ready_signal(line) {
         "success"
     } else {
         "info"
     }
+}
+
+/// Detect if a log line indicates the service is ready to accept connections
+fn is_service_ready_signal(line: &str) -> bool {
+    let lower = line.to_lowercase();
+    lower.contains("listening") || lower.contains("started on") || lower.contains("ready on")
+        || lower.contains("server is running") || lower.contains("server started")
 }
