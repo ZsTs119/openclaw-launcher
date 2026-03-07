@@ -81,11 +81,10 @@ pub fn get_providers() -> Vec<ProviderInfo> {
             category: "free".into(),
             base_url: "https://api.siliconflow.cn/v1".into(),
             register_url: "https://cloud.siliconflow.cn/".into(),
-            description: "国内免费注册，支持 DeepSeek/Qwen 等模型".into(),
+            description: "国内免费注册，DeepSeek V3 免费可用".into(),
             api_type: "openai-completions".into(),
             models: vec![
                 ModelInfo { id: "deepseek-ai/DeepSeek-V3".into(), name: "DeepSeek V3".into(), provider: "siliconflow".into(), is_free: true, context_window: 131072, max_tokens: 65536 },
-                ModelInfo { id: "Qwen/Qwen3-8B".into(), name: "Qwen3 8B".into(), provider: "siliconflow".into(), is_free: true, context_window: 131072, max_tokens: 32768 },
             ],
         },
         // ===== 🔥 Coding Plan 服务商 =====
