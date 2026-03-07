@@ -409,6 +409,12 @@ pub fn inject_default_config(app: tauri::AppHandle) -> Result<String, String> {
       ]
     }}
   }},
+  "gateway": {{
+    "mode": "local",
+    "auth": {{
+      "token": "openclaw-launcher-local"
+    }}
+  }},
   "sandbox": {{
     "paths": [
       "{}"

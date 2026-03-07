@@ -236,7 +236,7 @@ function App() {
         <header className="header">
           <div className="header-left">
             <span className="header-logo">OpenClaw Launcher</span>
-            <span className="header-version">v0.3.0</span>
+            <span className="header-version">v0.3.1</span>
           </div>
           <span className={`status-dot ${getStatusClass()}`} />
         </header>
@@ -260,7 +260,7 @@ function App() {
         <header className="header">
           <div className="header-left">
             <span className="header-logo">OpenClaw Launcher</span>
-            <span className="header-version">v0.3.0</span>
+            <span className="header-version">v0.3.1</span>
           </div>
         </header>
         <div className="init-screen">
@@ -295,7 +295,7 @@ function App() {
       <header className="header">
         <div className="header-left">
           <span className="header-logo">OpenClaw Launcher</span>
-          <span className="header-version">v0.3.0</span>
+          <span className="header-version">v0.3.1</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>

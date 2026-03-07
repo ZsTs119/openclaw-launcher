@@ -1,7 +1,7 @@
 {
   "name": "openclaw-launcher",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "One-click installer & launcher for OpenClaw AI coding assistant",
   "author": "ZsTs119 <zsts@foxmail.com>",
   "license": "MIT",
