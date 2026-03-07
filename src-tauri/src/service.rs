@@ -102,7 +102,8 @@ pub async fn start_service(
 
     let mut cmd = Command::new(&node_bin);
     cmd.arg(&run_script)
-        .arg("gateway")  // Start the gateway HTTP server (without this, CLI just prints help)
+        .arg("gateway")  // Start the gateway HTTP server
+        .arg("--allow-unconfigured")  // Allow starting without `openclaw setup`
         .current_dir(&openclaw_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
