@@ -32,10 +32,10 @@
 - [x] Gateway 正确启动 (gateway + --allow-unconfigured + --port) ✅
 - [x] Gateway Auth Token 自动配置 ✅
 - [x] 自动端口选择 (18789-18799 扫描) ✅
-- [ ] Windows 中文用户名路径编码兼容
-- [ ] Windows 260 字符长路径限制处理
-- [ ] 完全断网友好提示
-- [ ] 磁盘空间预检查
+- [x] Windows 中文用户名路径编码兼容 ✅
+- [x] Windows 260 字符长路径限制处理 ✅
+- [x] 完全断网友好提示 ✅
+- [x] 磁盘空间预检查 ✅
 
 ## ⚙️ Phase 3: v1.0 上线版本 — UI 重构 + API Key 配置
 
