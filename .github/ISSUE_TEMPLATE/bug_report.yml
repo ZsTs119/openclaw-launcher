@@ -1,0 +1,69 @@
+name: 🐛 Bug 报告
+description: 报告一个 Bug 帮助我们改进
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你提交 Bug 报告！请尽可能详细地填写以下信息。
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug 描述
+      description: 简要描述你遇到的问题
+      placeholder: "例如: 点击"启动服务"后没有反应..."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 重现步骤
+      description: 如何重现这个 Bug？
+      value: |
+        1. 打开 OpenClaw Launcher
+        2. 点击 '...'
+        3. 看到错误 '...'
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 你期望会发生什么？
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - Windows 10
+        - Windows 11
+        - macOS 13 (Ventura)
+        - macOS 14 (Sonoma)
+        - macOS 15 (Sequoia)
+        - Ubuntu 22.04
+        - Ubuntu 24.04
+        - 其他 Linux
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Launcher 版本
+      description: "在 Launcher 标题栏或关于页面查看"
+      placeholder: "v0.2.5"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 运行日志
+      description: "在 Launcher 中勾选"原始日志"，复制所有内容粘贴到这里"
+      render: text
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图
+      description: 如果有截图可以帮助理解问题，请拖拽上传
