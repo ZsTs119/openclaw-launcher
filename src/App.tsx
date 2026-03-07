@@ -393,8 +393,8 @@ function App() {
 
   // Find display names for current config
   const currentProviderName = currentConfig?.provider
-    ? providers.find(p => p.id === currentConfig.provider)?.name || currentConfig.provider
-    : "未配置";
+    ? providers.find(p => p.id === currentConfig.provider)?.name || (currentConfig.provider === "custom" ? "自定义中转站" : currentConfig.provider)
+    : (currentConfig?.has_api_key ? "自定义" : "未配置");
   const currentModelName = currentConfig?.model || "未选择";
 
   // ===== Init Screen =====
