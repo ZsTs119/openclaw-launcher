@@ -77,6 +77,7 @@ function formatUptime(seconds: number): string {
 }
 
 const CATEGORY_LABELS: Record<string, { label: string; icon: string }> = {
+  free: { label: "免费注册", icon: "🆓" },
   provider: { label: "Coding Plan", icon: "💳" },
   custom: { label: "自定义中转站", icon: "🔧" },
 };
@@ -99,7 +100,7 @@ function App() {
 
   // Model/Config state
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState("provider");
+  const [selectedCategory, setSelectedCategory] = useState("free");
   const [selectedProvider, setSelectedProvider] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [baseUrlInput, setBaseUrlInput] = useState("");

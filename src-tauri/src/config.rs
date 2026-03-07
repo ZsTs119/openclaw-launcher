@@ -47,6 +47,47 @@ pub struct CurrentConfig {
 #[tauri::command]
 pub fn get_providers() -> Vec<ProviderInfo> {
     vec![
+        // ===== 🆓 免费注册 =====
+        ProviderInfo {
+            id: "openrouter".into(),
+            name: "OpenRouter".into(),
+            category: "free".into(),
+            base_url: "https://openrouter.ai/api/v1".into(),
+            register_url: "https://openrouter.ai/keys".into(),
+            description: "聚合多家模型，免费模型无限用".into(),
+            api_type: "openai-completions".into(),
+            models: vec![
+                ModelInfo { id: "google/gemini-2.0-flash-exp:free".into(), name: "Gemini 2.0 Flash (免费)".into(), provider: "openrouter".into(), is_free: true, context_window: 1000000, max_tokens: 65536 },
+                ModelInfo { id: "meta-llama/llama-4-maverick:free".into(), name: "Llama 4 Maverick (免费)".into(), provider: "openrouter".into(), is_free: true, context_window: 131072, max_tokens: 32768 },
+                ModelInfo { id: "qwen/qwen3-235b-a22b:free".into(), name: "Qwen3 235B (免费)".into(), provider: "openrouter".into(), is_free: true, context_window: 262144, max_tokens: 65536 },
+            ],
+        },
+        ProviderInfo {
+            id: "groq".into(),
+            name: "Groq".into(),
+            category: "free".into(),
+            base_url: "https://api.groq.com/openai/v1".into(),
+            register_url: "https://console.groq.com/keys".into(),
+            description: "免费注册，超快推理速度".into(),
+            api_type: "openai-completions".into(),
+            models: vec![
+                ModelInfo { id: "llama-3.3-70b-versatile".into(), name: "Llama 3.3 70B".into(), provider: "groq".into(), is_free: true, context_window: 131072, max_tokens: 32768 },
+                ModelInfo { id: "gemma2-9b-it".into(), name: "Gemma2 9B".into(), provider: "groq".into(), is_free: true, context_window: 8192, max_tokens: 8192 },
+            ],
+        },
+        ProviderInfo {
+            id: "siliconflow".into(),
+            name: "SiliconFlow 硅基流动".into(),
+            category: "free".into(),
+            base_url: "https://api.siliconflow.cn/v1".into(),
+            register_url: "https://cloud.siliconflow.cn/".into(),
+            description: "国内免费注册，支持 DeepSeek/Qwen 等模型".into(),
+            api_type: "openai-completions".into(),
+            models: vec![
+                ModelInfo { id: "deepseek-ai/DeepSeek-V3".into(), name: "DeepSeek V3".into(), provider: "siliconflow".into(), is_free: true, context_window: 131072, max_tokens: 65536 },
+                ModelInfo { id: "Qwen/Qwen2.5-72B-Instruct".into(), name: "Qwen2.5 72B".into(), provider: "siliconflow".into(), is_free: true, context_window: 131072, max_tokens: 32768 },
+            ],
+        },
         // ===== 🔥 Coding Plan 服务商 =====
         ProviderInfo {
             id: "bailian".into(),
