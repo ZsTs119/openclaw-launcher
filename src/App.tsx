@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 
-type AppPhase = "checking" | "initializing" | "ready";
+type AppPhase = "checking" | "initializing" | "workspace" | "ready";
 
 interface LogEntry {
   time: string;
@@ -52,6 +53,7 @@ function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showRawLogs, setShowRawLogs] = useState(false);
   const [uptime, setUptime] = useState(0);
+  const [workspacePath, setWorkspacePath] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
   const uptimeRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -117,9 +119,15 @@ function App() {
       const serviceRunning = await invoke<boolean>("is_service_running");
 
       if (nodeOk && openclawOk && modulesOk) {
-        setPhase("ready");
-        setRunning(serviceRunning);
-        addLog("success", "✅ 环境检查通过，所有组件就绪");
+        const configOk = await invoke<boolean>("check_config_exists");
+        if (!configOk) {
+          setPhase("workspace");
+          addLog("info", "首次使用，请选择工作区目录");
+        } else {
+          setPhase("ready");
+          setRunning(serviceRunning);
+          addLog("success", "✅ 环境检查通过，所有组件就绪");
+        }
       } else {
         setPhase("initializing");
         addLog("info", "首次启动，开始初始化环境...");
@@ -141,6 +149,28 @@ function App() {
     } catch (err) {
       addLog("error", `初始化失败: ${err}`);
       setProgressMsg(`❌ 初始化失败: ${err}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectFolder = async () => {
+    const selected = await open({ directory: true, multiple: false, title: "选择你的工作区目录" });
+    if (selected && typeof selected === "string") {
+      setWorkspacePath(selected);
+    }
+  };
+
+  const handleConfirmWorkspace = async () => {
+    setLoading(true);
+    try {
+      // Inject config with workspace path (backend will use default if empty)
+      await invoke("inject_default_config");
+      await invoke("inject_default_models");
+      addLog("success", `✅ 工作区已配置: ${workspacePath || "默认目录"}`);
+      setPhase("ready");
+    } catch (err) {
+      addLog("error", `配置失败: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -184,7 +214,7 @@ function App() {
         <header className="header">
           <div className="header-left">
             <span className="header-logo">OpenClaw Launcher</span>
-            <span className="header-version">v0.1.0</span>
+            <span className="header-version">v0.2.0</span>
           </div>
           <span className={`status-dot ${getStatusClass()}`} />
         </header>
@@ -196,6 +226,42 @@ function App() {
             <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
           </div>
           <div className="init-message">{progressMsg}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== Workspace Wizard =====
+  if (phase === "workspace") {
+    return (
+      <div className="app">
+        <header className="header">
+          <div className="header-left">
+            <span className="header-logo">OpenClaw Launcher</span>
+            <span className="header-version">v0.2.0</span>
+          </div>
+        </header>
+        <div className="init-screen">
+          <div className="init-title">📂 选择工作区目录</div>
+          <div className="init-message" style={{ maxWidth: 420, lineHeight: 1.8 }}>
+            AI 会在这个文件夹里帮你写代码。你可以选择任意文件夹，或使用默认目录。
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+            <code className="workspace-path">
+              {workspacePath || "~/Documents/OpenClaw-Projects (默认)"}
+            </code>
+            <button className="btn-quick" onClick={handleSelectFolder}>
+              📁 浏览...
+            </button>
+          </div>
+          <button
+            className="btn-start start"
+            onClick={handleConfirmWorkspace}
+            disabled={loading}
+            style={{ marginTop: 24 }}
+          >
+            ✅ 确认并继续
+          </button>
         </div>
       </div>
     );
