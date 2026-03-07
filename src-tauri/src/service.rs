@@ -243,9 +243,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_port_available_on_random_port() {
-        // A random high port should be available
-        assert!(is_port_available(49152 + (std::process::id() as u16 % 1000)));
+    fn test_port_available_after_release() {
+        // Let OS pick a free port, release it, then verify it's available
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        assert!(is_port_available(port));
     }
 
     #[test]
