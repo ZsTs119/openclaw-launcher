@@ -52,19 +52,39 @@ pub fn get_node_binary() -> Result<PathBuf, String> {
     }
 }
 
-/// Get the npm binary path (relative to node)
+/// Get the npm cli.js path (the actual JS file that node can execute)
+/// On Windows, npm.cmd is a batch wrapper — we can't call `node npm.cmd`.
+/// Instead we find the actual JS entry point: node_modules/npm/bin/npm-cli.js
 pub fn get_npm_binary() -> Result<PathBuf, String> {
     let node_bin = get_node_binary()?;
-    let npm = if cfg!(target_os = "windows") {
-        node_bin.parent().unwrap().join("npm.cmd")
+    let node_root = if cfg!(target_os = "windows") {
+        // Windows: node.exe is at node-vXX.XX.X-win-x64/node.exe
+        node_bin.parent().unwrap().to_path_buf()
     } else {
-        node_bin.parent().unwrap().join("npm")
+        // Linux/Mac: node is at node-vXX.XX.X-linux-x64/bin/node → go up to the root
+        node_bin.parent().unwrap().parent().unwrap().to_path_buf()
     };
-    if npm.exists() {
-        Ok(npm)
+
+    // Primary: the actual npm-cli.js embedded in Node's distribution
+    let npm_cli = if cfg!(target_os = "windows") {
+        node_root.join("node_modules").join("npm").join("bin").join("npm-cli.js")
     } else {
-        Err("npm binary not found".to_string())
+        node_root.join("lib").join("node_modules").join("npm").join("bin").join("npm-cli.js")
+    };
+
+    if npm_cli.exists() {
+        return Ok(npm_cli);
     }
+
+    // Fallback: try the direct npm script (Linux/Mac only)
+    if !cfg!(target_os = "windows") {
+        let npm_script = node_bin.parent().unwrap().join("npm");
+        if npm_script.exists() {
+            return Ok(npm_script);
+        }
+    }
+
+    Err(format!("npm-cli.js not found. Searched: {}", npm_cli.display()))
 }
 
 /// Check if Node.js is already available in the sandbox
