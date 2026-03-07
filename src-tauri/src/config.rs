@@ -1,6 +1,15 @@
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use tauri::Emitter;
 
+/// Get the ACTUAL OpenClaw config directory that the gateway reads: ~/.openclaw/
+/// This is different from crate::openclaw::get_openclaw_dir() which returns the sandbox path
+fn get_user_openclaw_dir() -> Result<PathBuf, String> {
+    let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
+    let dir = home.join(".openclaw");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建 .openclaw 目录失败: {}", e))?;
+    Ok(dir)
+}
 
 
 /// Provider categories for the UI
@@ -171,7 +180,7 @@ pub fn get_providers() -> Vec<ProviderInfo> {
 /// Get current OpenClaw config status
 #[tauri::command]
 pub fn get_current_config() -> Result<CurrentConfig, String> {
-    let openclaw_dir = crate::openclaw::get_openclaw_dir()?;
+    let openclaw_dir = get_user_openclaw_dir()?;
     let config_path = openclaw_dir.join("openclaw.json");
 
     if !config_path.exists() {
@@ -207,7 +216,7 @@ pub fn save_api_config(
     base_url: Option<String>,
     model: Option<String>,
 ) -> Result<String, String> {
-    let openclaw_dir = crate::openclaw::get_openclaw_dir()?;
+    let openclaw_dir = get_user_openclaw_dir()?;
 
     // Get provider info
     let providers = get_providers();
@@ -353,7 +362,7 @@ pub fn set_default_model(
     app: tauri::AppHandle,
     model_id: String,
 ) -> Result<String, String> {
-    let openclaw_dir = crate::openclaw::get_openclaw_dir()?;
+    let openclaw_dir = get_user_openclaw_dir()?;
     let config_path = openclaw_dir.join("openclaw.json");
 
     if config_path.exists() {
@@ -388,7 +397,7 @@ pub fn open_provider_register(provider_id: String) -> Result<String, String> {
 /// Reset config — delete openclaw.json and auth to simulate fresh install
 #[tauri::command]
 pub fn reset_config(app: tauri::AppHandle) -> Result<String, String> {
-    let openclaw_dir = crate::openclaw::get_openclaw_dir()?;
+    let openclaw_dir = get_user_openclaw_dir()?;
     let config_path = openclaw_dir.join("openclaw.json");
 
     if config_path.exists() {
