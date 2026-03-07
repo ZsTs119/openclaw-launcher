@@ -36,6 +36,29 @@ body {
   height: 100vh;
 }
 
+/* ===== Custom Scrollbar ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(136, 136, 170, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(136, 136, 170, 0.5);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .app {
   display: flex;
   flex-direction: column;
@@ -114,8 +137,8 @@ body {
 /* ===== Tab Navigation ===== */
 .tab-nav {
   display: flex;
-  gap: 2px;
-  padding: 6px 16px;
+  gap: 4px;
+  padding: 4px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
@@ -125,36 +148,39 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 7px 16px;
   border: none;
+  border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   transition: all 0.2s;
+  -webkit-app-region: no-drag;
 }
 
 .tab-btn:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
 }
 
 .tab-btn.active {
   color: var(--accent-blue);
-  background: rgba(79, 109, 245, 0.1);
+  border-bottom-color: var(--accent-blue);
   font-weight: 600;
 }
 
 .tab-icon {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 /* ===== Tab Content ===== */
 .tab-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px 20px;
+  min-height: 0;
 }
 
 /* ===== Dashboard ===== */
@@ -533,9 +559,10 @@ body {
 
 /* ===== Logs ===== */
 .logs-page {
-  height: 100%;
   display: flex;
   flex-direction: column;
+  height: calc(100vh - 120px);
+  min-height: 300px;
 }
 
 .log-panel {
@@ -580,14 +607,14 @@ body {
 .log-content {
   padding: 8px 14px;
   overflow-y: auto;
-  max-height: 200px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 12px;
+  line-height: 1.5;
 }
 
 .log-content.full-height {
   flex: 1;
-  max-height: none;
+  min-height: 0;
 }
 
 .log-line {
