@@ -264,10 +264,11 @@ pub fn save_api_config(
     let _ = std::fs::create_dir_all(&workspace);
 
     // Write the full OpenClaw-compatible config
+    // Use mode: "replace" so we fully overwrite any old model catalog
     let config_content = format!(
         r#"{{
   "models": {{
-    "mode": "merge",
+    "mode": "replace",
     "providers": {{
       "{}": {{
         "baseUrl": "{}",
@@ -315,18 +316,24 @@ pub fn save_api_config(
     std::fs::write(&config_path, &config_content)
         .map_err(|e| format!("写入配置文件失败: {}", e))?;
 
-    // Also write auth-profiles.json for agent-level auth
-    // OpenClaw agents look in agents/main/agent/auth-profiles.json for provider auth
+    // Also write agents/main/agent/models.json — this is where the agent reads its model catalog
+    // Per docs: "Non-empty agent models.json apiKey/baseUrl win"
     let agent_dir = openclaw_dir.join("agents").join("main").join("agent");
     let _ = std::fs::create_dir_all(&agent_dir);
-    let auth_profiles = format!(r#"{{
-  "{}": {{
-    "apiKey": "{}",
-    "baseUrl": "{}"
+    let models_json = format!(r#"{{
+  "providers": {{
+    "{}": {{
+      "baseUrl": "{}",
+      "apiKey": "{}",
+      "api": "{}",
+      "models": [
+{}
+      ]
+    }}
   }}
-}}"#, provider, api_key, effective_base_url);
-    let auth_path = agent_dir.join("auth-profiles.json");
-    let _ = std::fs::write(&auth_path, &auth_profiles);
+}}"#, provider, effective_base_url, api_key, api_type, model_defs_json);
+    let models_path = agent_dir.join("models.json");
+    let _ = std::fs::write(&models_path, &models_json);
 
     let _ = app.emit("config-updated", serde_json::json!({
         "provider": provider,
@@ -389,10 +396,10 @@ pub fn reset_config(app: tauri::AppHandle) -> Result<String, String> {
             .map_err(|e| format!("删除配置失败: {}", e))?;
     }
 
-    // Also remove agent auth-profiles
-    let auth_path = openclaw_dir.join("agents").join("main").join("agent").join("auth-profiles.json");
-    if auth_path.exists() {
-        let _ = std::fs::remove_file(&auth_path);
+    // Also remove agent models.json
+    let models_path = openclaw_dir.join("agents").join("main").join("agent").join("models.json");
+    if models_path.exists() {
+        let _ = std::fs::remove_file(&models_path);
     }
 
     let _ = app.emit("config-updated", serde_json::json!({
