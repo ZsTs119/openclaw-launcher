@@ -220,7 +220,7 @@ pub fn stop_service(
 /// Classify log line into a severity level for frontend display
 fn classify_log_level(line: &str) -> &'static str {
     let lower = line.to_lowercase();
-    if lower.contains("error") || lower.contains("fatal") || lower.contains("panic") {
+    if lower.contains("error") || lower.contains("fatal") || lower.contains("panic") || lower.trim_start().starts_with("err_") {
         "error"
     } else if lower.contains("warn") {
         "warn"
@@ -236,4 +236,45 @@ fn is_service_ready_signal(line: &str) -> bool {
     let lower = line.to_lowercase();
     lower.contains("listening") || lower.contains("started on") || lower.contains("ready on")
         || lower.contains("server is running") || lower.contains("server started")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_port_available_on_random_port() {
+        // A random high port should be available
+        assert!(is_port_available(49152 + (std::process::id() as u16 % 1000)));
+    }
+
+    #[test]
+    fn test_port_occupied_detection() {
+        // Bind a port, then check it's no longer available
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert!(!is_port_available(port));
+        drop(listener);
+        assert!(is_port_available(port));
+    }
+
+    #[test]
+    fn test_classify_log_level() {
+        assert_eq!(classify_log_level("npm warn deprecated"), "warn");
+        assert_eq!(classify_log_level("npm error code ENOENT"), "error");
+        assert_eq!(classify_log_level("  ERR_PNPM something failed"), "error");
+        assert_eq!(classify_log_level("added 150 packages"), "info");
+        assert_eq!(classify_log_level("Server started on port 3000"), "success");
+        assert_eq!(classify_log_level("some normal output"), "info");
+    }
+
+    #[test]
+    fn test_service_ready_signal() {
+        assert!(is_service_ready_signal("Server started on port 3000"));
+        assert!(is_service_ready_signal("Listening on http://localhost:3000"));
+        assert!(is_service_ready_signal("Gateway ready on 0.0.0.0:3000"));
+        assert!(is_service_ready_signal("server is running at port 3000"));
+        assert!(!is_service_ready_signal("compiling TypeScript..."));
+        assert!(!is_service_ready_signal("installing dependencies"));
+    }
 }

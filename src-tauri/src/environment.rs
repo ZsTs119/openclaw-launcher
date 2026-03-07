@@ -306,3 +306,42 @@ pub fn get_environment_info() -> Result<serde_json::Value, String> {
         "arch": std::env::consts::ARCH,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sandbox_dir_is_deterministic() {
+        let dir1 = get_sandbox_dir().unwrap();
+        let dir2 = get_sandbox_dir().unwrap();
+        assert_eq!(dir1, dir2);
+        assert!(dir1.ends_with("OpenClawLauncher"));
+    }
+
+    #[test]
+    fn test_sandbox_dir_exists_after_creation() {
+        let dir = get_sandbox_dir().unwrap();
+        assert!(dir.exists());
+        assert!(dir.is_dir());
+    }
+
+    #[test]
+    fn test_node_dir_is_under_sandbox() {
+        let sandbox = get_sandbox_dir().unwrap();
+        let node_dir = get_node_dir().unwrap();
+        assert!(node_dir.starts_with(&sandbox));
+        assert!(node_dir.ends_with("node"));
+    }
+
+    #[test]
+    fn test_node_binary_error_when_not_installed() {
+        // In CI/test environments where node isn't installed in sandbox,
+        // this should return an error gracefully (not panic)
+        let result = get_node_binary();
+        // It's OK if it returns an error — we just want it not to panic
+        if let Err(e) = &result {
+            assert!(!e.is_empty());
+        }
+    }
+}

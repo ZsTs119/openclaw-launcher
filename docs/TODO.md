@@ -44,10 +44,29 @@
 - [ ] 日志导出: 一键打包日志供用户反馈 bug
 
 ## 🏢 Phase 4: 企业级分发与规模化
+- [ ] **Sentry 错误上报** (opt-in): 自动捕获崩溃，Rust + JS 双 SDK
 - [ ] Inno Setup 打包: 防火墙白名单注入
 - [ ] Windows 代码签名 (EV 证书) — 消除 SmartScreen 警告
 - [ ] macOS 公证 (notarization) — 消除 Gatekeeper 拦截
 - [ ] 应用内自动更新 (tauri-plugin-updater)
 - [ ] 企业代理服务器支持 (HTTP_PROXY/HTTPS_PROXY)
-- [ ] 遥测与错误上报 (可选 opt-in, 帮助改进产品)
 - [ ] ARM Windows 支持 (Surface Pro X 等设备)
+
+## 🧪 自动化测试
+- [x] Rust 单元测试: environment.rs, service.rs 核心函数 ✅
+- [x] CI 集成: `cargo test` 在 GitHub Actions 构建前执行 ✅
+- [ ] 前端组件测试 (Vitest + React Testing Library)
+- [ ] E2E 测试: 完整安装→启动→对话流程
+
+## 📋 开源项目规范
+- [x] LICENSE (MIT) ✅
+- [x] CONTRIBUTING.md (开发环境、提交规范、项目结构) ✅
+- [x] CHANGELOG.md (v0.1.0 → v0.2.5 完整记录) ✅
+- [x] SECURITY.md (安全漏洞上报流程) ✅
+- [x] CODE_OF_CONDUCT.md (行为准则) ✅
+- [x] GitHub Issue 模板 (Bug + Feature YAML 表单) ✅
+- [x] GitHub PR 模板 (检查清单) ✅
+- [ ] GitHub Discussions 社区交流 (需手动在 GitHub Settings 开启)
+- [ ] 文档站 (GitHub Pages 或 Mintlify)
+- [ ] i18n 国际化框架 (当前硬编码中文，无法切英文)
+- [ ] CI 自动生成 Release Notes (基于 Conventional Commits)
