@@ -181,8 +181,19 @@ pub async fn run_npm_install(app: tauri::AppHandle) -> Result<String, String> {
         return Err("OpenClaw 源码未找到，请先下载源码".to_string());
     }
 
-    if check_node_modules_exists()? {
-        return Ok("node_modules already installed".to_string());
+    let node_modules = openclaw_dir.join("node_modules");
+    if node_modules.exists() {
+        // Check if node_modules was installed by pnpm (has .pnpm directory)
+        if node_modules.join(".pnpm").exists() {
+            return Ok("node_modules already installed (pnpm)".to_string());
+        }
+        // node_modules exists but was installed by npm — auto-cleanup for pnpm reinstall
+        let _ = app.emit("setup-progress", serde_json::json!({
+            "stage": "npm_install",
+            "message": "检测到旧版依赖，正在自动清理后重新安装...",
+            "percent": 86
+        }));
+        let _ = std::fs::remove_dir_all(&node_modules);
     }
 
     let node_bin = environment::get_node_binary()?;
