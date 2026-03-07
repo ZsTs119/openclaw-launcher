@@ -424,7 +424,52 @@ pub fn check_config_exists() -> Result<bool, String> {
     Ok(dir.join(".openclaw.json").exists())
 }
 
-/// Full setup pipeline: download source + install deps + inject config
+/// Install preset skills into OpenClaw's skills directory
+#[tauri::command]
+pub fn install_preset_skills(app: tauri::AppHandle) -> Result<String, String> {
+    let openclaw_dir = get_openclaw_dir()?;
+    let skills_dir = openclaw_dir.join("skills");
+
+    if skills_dir.join("skill-creator").join("SKILL.md").exists()
+        && skills_dir.join("skill-finder").join("SKILL.md").exists()
+    {
+        return Ok("Preset skills already installed".to_string());
+    }
+
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "stage": "install_skills",
+        "message": "📦 正在安装预置技能包...",
+        "percent": 98
+    }));
+
+    // Embedded skill content (compiled into binary)
+    let skill_creator_md = include_str!("../../docs/skills/skill-creator/SKILL.md");
+    let skill_finder_md = include_str!("../../docs/skills/skill-finder/SKILL.md");
+
+    // Create skill directories
+    let creator_dir = skills_dir.join("skill-creator");
+    let finder_dir = skills_dir.join("skill-finder");
+    std::fs::create_dir_all(&creator_dir)
+        .map_err(|e| format!("创建 skill-creator 目录失败: {}", e))?;
+    std::fs::create_dir_all(&finder_dir)
+        .map_err(|e| format!("创建 skill-finder 目录失败: {}", e))?;
+
+    // Write SKILL.md files
+    std::fs::write(creator_dir.join("SKILL.md"), skill_creator_md)
+        .map_err(|e| format!("写入 skill-creator 失败: {}", e))?;
+    std::fs::write(finder_dir.join("SKILL.md"), skill_finder_md)
+        .map_err(|e| format!("写入 skill-finder 失败: {}", e))?;
+
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "stage": "skills_done",
+        "message": "✅ 预置技能包安装完成 (skill-creator + skill-finder)",
+        "percent": 99
+    }));
+
+    Ok(format!("Preset skills installed at: {}", skills_dir.display()))
+}
+
+/// Full setup pipeline: download source + install deps + inject config + bundle skills
 #[tauri::command]
 pub async fn setup_openclaw(app: tauri::AppHandle) -> Result<String, String> {
     // Step 1: Ensure Node.js is ready
@@ -441,6 +486,9 @@ pub async fn setup_openclaw(app: tauri::AppHandle) -> Result<String, String> {
     // Step 4: Inject default configs (non-destructive)
     inject_default_config(app.clone())?;
     inject_default_models(app.clone())?;
+
+    // Step 5: Install preset skills
+    install_preset_skills(app.clone())?;
 
     let _ = app.emit("setup-progress", serde_json::json!({
         "stage": "all_done",

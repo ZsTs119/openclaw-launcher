@@ -9,6 +9,38 @@ interface LogEntry {
   time: string;
   level: string;
   message: string;
+  humanized?: string;
+}
+
+// Humanized log translation map (npm/node jargon → 人话)
+const LOG_TRANSLATIONS: [RegExp, string][] = [
+  [/npm warn/i, "⚠️ 依赖警告（可忽略）"],
+  [/npm error/i, "❌ 依赖安装出错"],
+  [/added \d+ packages/i, "✅ 依赖包安装完成"],
+  [/listening on.*:?(\d+)/i, "✅ 服务已就绪，端口已打开"],
+  [/server (is )?running/i, "✅ 服务正在运行"],
+  [/EADDRINUSE/i, "❌ 端口被占用，请关闭占用程序后重试"],
+  [/ECONNREFUSED/i, "❌ 连接被拒绝，检查网络设置"],
+  [/ENOTFOUND/i, "❌ 域名解析失败，检查网络连接"],
+  [/compiling/i, "⚙️ 正在编译..."],
+  [/deprecated/i, "ℹ️ 有过时的依赖（不影响使用）"],
+  [/ready in/i, "✅ 启动完成！"],
+];
+
+function humanizeLog(msg: string): string | undefined {
+  for (const [pattern, translation] of LOG_TRANSLATIONS) {
+    if (pattern.test(msg)) return translation;
+  }
+  return undefined;
+}
+
+function formatUptime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 function App() {
@@ -18,13 +50,31 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [progressMsg, setProgressMsg] = useState("正在检查环境...");
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [showRawLogs, setShowRawLogs] = useState(false);
+  const [uptime, setUptime] = useState(0);
   const logRef = useRef<HTMLDivElement>(null);
+  const uptimeRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const addLog = (level: string, message: string) => {
     const now = new Date();
     const time = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}`;
-    setLogs((prev) => [...prev.slice(-200), { time, level, message }]);
+    const humanized = humanizeLog(message);
+    setLogs((prev) => [...prev.slice(-300), { time, level, message, humanized }]);
   };
+
+  // Uptime counter
+  useEffect(() => {
+    if (running) {
+      setUptime(0);
+      uptimeRef.current = setInterval(() => setUptime((u) => u + 1), 1000);
+    } else {
+      if (uptimeRef.current) clearInterval(uptimeRef.current);
+      setUptime(0);
+    }
+    return () => {
+      if (uptimeRef.current) clearInterval(uptimeRef.current);
+    };
+  }, [running]);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -37,7 +87,6 @@ function App() {
   useEffect(() => {
     checkEnvironment();
 
-    // Listen for setup progress events
     const unlistenProgress = listen<{ stage: string; message: string; percent: number }>(
       "setup-progress",
       (event) => {
@@ -47,7 +96,6 @@ function App() {
       }
     );
 
-    // Listen for service log events
     const unlistenLogs = listen<{ level: string; message: string }>(
       "service-log",
       (event) => {
@@ -170,6 +218,32 @@ function App() {
       </header>
 
       <div className="dashboard">
+        {/* Status Cards */}
+        <div className="status-cards">
+          <div className={`status-card main-card ${running ? "active" : ""}`}>
+            <div className="card-icon">{running ? "🟢" : "⚫"}</div>
+            <div className="card-info">
+              <div className="card-label">服务状态</div>
+              <div className="card-value">{running ? "运行中" : "已停止"}</div>
+            </div>
+          </div>
+          <div className="status-card">
+            <div className="card-icon">⏱️</div>
+            <div className="card-info">
+              <div className="card-label">运行时长</div>
+              <div className="card-value">{running ? formatUptime(uptime) : "--"}</div>
+            </div>
+          </div>
+          <div className="status-card">
+            <div className="card-icon">🌐</div>
+            <div className="card-info">
+              <div className="card-label">访问地址</div>
+              <div className="card-value">{running ? "localhost:3000" : "--"}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Controls */}
         <div className="control-panel">
           <button
             className={`btn-start ${running ? "stop" : "start"}`}
@@ -189,21 +263,35 @@ function App() {
           </div>
         </div>
 
+        {/* Log Panel */}
         <div className="log-panel">
           <div className="log-header">
             <span>📋 运行日志</span>
-            <span>{logs.length} 条记录</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <label className="log-toggle">
+                <input
+                  type="checkbox"
+                  checked={showRawLogs}
+                  onChange={(e) => setShowRawLogs(e.target.checked)}
+                />
+                <span>原始日志</span>
+              </label>
+              <span>{logs.length} 条</span>
+            </div>
           </div>
           <div className="log-content" ref={logRef}>
             {logs.length === 0 ? (
               <div className="log-empty">暂无日志 — 点击「启动 OpenClaw」开始</div>
             ) : (
-              logs.map((log, i) => (
-                <div className="log-line" key={i}>
-                  <span className="log-time">{log.time}</span>
-                  <span className={`log-msg ${log.level}`}>{log.message}</span>
-                </div>
-              ))
+              logs.map((log, i) => {
+                const displayMsg = !showRawLogs && log.humanized ? log.humanized : log.message;
+                return (
+                  <div className="log-line" key={i}>
+                    <span className="log-time">{log.time}</span>
+                    <span className={`log-msg ${log.level}`}>{displayMsg}</span>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

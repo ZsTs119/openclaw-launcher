@@ -20,6 +20,7 @@ pub fn run() {
             openclaw::run_npm_install,
             openclaw::inject_default_config,
             openclaw::inject_default_models,
+            openclaw::install_preset_skills,
             openclaw::setup_openclaw,
             // Service lifecycle
             service::is_service_running,
