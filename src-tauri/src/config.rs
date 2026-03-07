@@ -315,6 +315,19 @@ pub fn save_api_config(
     std::fs::write(&config_path, &config_content)
         .map_err(|e| format!("写入配置文件失败: {}", e))?;
 
+    // Also write auth-profiles.json for agent-level auth
+    // OpenClaw agents look in agents/main/agent/auth-profiles.json for provider auth
+    let agent_dir = openclaw_dir.join("agents").join("main").join("agent");
+    let _ = std::fs::create_dir_all(&agent_dir);
+    let auth_profiles = format!(r#"{{
+  "{}": {{
+    "apiKey": "{}",
+    "baseUrl": "{}"
+  }}
+}}"#, provider, api_key, effective_base_url);
+    let auth_path = agent_dir.join("auth-profiles.json");
+    let _ = std::fs::write(&auth_path, &auth_profiles);
+
     let _ = app.emit("config-updated", serde_json::json!({
         "provider": provider,
         "hasKey": true,
@@ -365,7 +378,7 @@ pub fn open_provider_register(provider_id: String) -> Result<String, String> {
     }
 }
 
-/// Reset config — delete openclaw.json to simulate fresh install
+/// Reset config — delete openclaw.json and auth to simulate fresh install
 #[tauri::command]
 pub fn reset_config(app: tauri::AppHandle) -> Result<String, String> {
     let openclaw_dir = crate::openclaw::get_openclaw_dir()?;
@@ -374,6 +387,12 @@ pub fn reset_config(app: tauri::AppHandle) -> Result<String, String> {
     if config_path.exists() {
         std::fs::remove_file(&config_path)
             .map_err(|e| format!("删除配置失败: {}", e))?;
+    }
+
+    // Also remove agent auth-profiles
+    let auth_path = openclaw_dir.join("agents").join("main").join("agent").join("auth-profiles.json");
+    if auth_path.exists() {
+        let _ = std::fs::remove_file(&auth_path);
     }
 
     let _ = app.emit("config-updated", serde_json::json!({
