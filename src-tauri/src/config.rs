@@ -291,6 +291,7 @@ pub fn save_api_config(
   }},
   "agents": {{
     "defaults": {{
+      "workspace": "{}",
       "model": {{
         "primary": "{}"
       }},
@@ -304,11 +305,6 @@ pub fn save_api_config(
     "auth": {{
       "token": "openclaw-launcher-local"
     }}
-  }},
-  "sandbox": {{
-    "paths": [
-      "{}"
-    ]
   }}
 }}"#,
         provider,
@@ -316,9 +312,9 @@ pub fn save_api_config(
         api_key,
         api_type,
         model_defs_json,
+        workspace.to_string_lossy().replace('\\', "\\\\"),
         full_model_id,
         models_map_json,
-        workspace.to_string_lossy().replace('\\', "\\\\")
     );
 
     let config_path = openclaw_dir.join("openclaw.json");
