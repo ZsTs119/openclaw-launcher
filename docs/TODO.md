@@ -42,30 +42,30 @@
 ### 🔴 必要功能 (Must-Have)
 
 #### API Key 配置引导
-- [ ] API Key 首次引导页面 (SetupPage)
-- [ ] 主流提供商列表 (Nvidia/OpenRouter/智谱GLM/阿里百炼/字节方舟/DeepSeek/OpenAI)
-- [ ] API Key 输入框 + 密钥验证
-- [ ] 自定义中转站支持 (Base URL + API Key)
-- [ ] 配置写入 OpenClaw auth 系统 (auth-profiles.json)
+- [x] API Key 首次引导页面 (SetupPage) ✅
+- [x] 主流提供商列表 (Nvidia/OpenRouter/Groq/智谱GLM/阿里百炼/字节方舟/DeepSeek/OpenAI/Kimi) ✅
+- [x] API Key 输入框 + 保存 ✅
+- [x] 自定义中转站支持 (Base URL + API Key) ✅
+- [x] 配置写入 OpenClaw 配置系统 ✅
 
 #### 模型选择与切换
-- [ ] 模型选择页面 (ModelPage)
-- [ ] 根据已配置 Key 显示可用模型列表
-- [ ] 一键切换默认模型
-- [ ] 切换后重启服务生效
+- [x] 模型选择页面 (ModelPage) ✅
+- [x] 根据已配置 Key 显示可用模型列表 ✅
+- [x] 一键切换默认模型 ✅
 
 #### UI 大重构
-- [ ] Tab 导航布局 (仪表盘 / 模型 / 设置 / 日志)
-- [ ] 仪表盘: 服务状态 + 启停 + 打开网页端
-- [ ] 设置页: API Key 管理、端口、工作区
-- [ ] 日志页: 单独页面，给开发者用
-- [ ] 精致深色主题 (渐变/玻璃态/微动画)
+- [x] Tab 导航布局 (仪表盘 / 模型 / 设置 / 日志) ✅
+- [x] 仪表盘: 服务状态 + 启停 + 打开网页端 ✅
+- [x] 设置页: 端口、版本、工作区 ✅
+- [x] 日志页: 单独页面，给开发者用 ✅
+- [x] 精致深色主题 (渐变/半透明/微动画) ✅
 
 #### 后端 Tauri 命令
-- [ ] `save_api_config(provider, api_key, base_url)` 保存配置
-- [ ] `get_current_config()` 读取当前状态
-- [ ] `set_default_model(model_id)` 切换模型
-- [ ] `validate_api_key(provider, api_key)` 验证 Key 有效性
+- [x] `save_api_config(provider, api_key, base_url)` 保存配置 ✅
+- [x] `get_current_config()` 读取当前状态 ✅
+- [x] `set_default_model(model_id)` 切换模型 ✅
+- [x] `get_providers()` 获取提供商列表 ✅
+- [x] `open_provider_register()` 打开注册页 ✅
 
 ### 🟡 高级功能 (v1.1+ Later)
 - [ ] Google Gemini OAuth 一键登录
