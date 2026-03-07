@@ -115,6 +115,8 @@ pub async fn start_service(
 
     // Pre-configure auth token so the web UI can connect
     let token = "openclaw-launcher-local";
+    let home_dir = dirs::home_dir().ok_or("Cannot determine home directory")?;
+    let openclaw_home = home_dir.join(".openclaw");
     let run_config = |args: &[&str]| {
         let mut config_cmd = Command::new(&node_bin);
         config_cmd.arg(&run_script);
@@ -122,6 +124,7 @@ pub async fn start_service(
             config_cmd.arg(arg);
         }
         config_cmd.current_dir(&openclaw_dir)
+            .env("OPENCLAW_HOME", &openclaw_home)
             .stdout(Stdio::null())
             .stderr(Stdio::null());
 
@@ -140,8 +143,9 @@ pub async fn start_service(
 
     // Set auth token
     run_config(&["config", "set", "gateway.auth.token", token]);
-    // Set default model to OpenRouter free model
-    run_config(&["config", "set", "agents.defaults.model", "openrouter/google/gemini-2.0-flash-exp:free"]);
+    // NOTE: Do NOT set agents.defaults.model here — it's already configured
+    // by save_api_config in openclaw.json. Setting it here would OVERWRITE
+    // the user's chosen model every time the service starts.
 
     let mut cmd = Command::new(&node_bin);
     cmd.arg(&run_script)
@@ -152,6 +156,7 @@ pub async fn start_service(
         .current_dir(&openclaw_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .env("OPENCLAW_HOME", &openclaw_home)
         .env("OPENCLAW_GATEWAY_AUTH_TOKEN", token);
 
     #[cfg(target_os = "windows")]
