@@ -335,17 +335,27 @@ pub fn set_default_model(
         let content = std::fs::read_to_string(&config_path)
             .map_err(|e| format!("读取配置失败: {}", e))?;
 
+        // Get current provider to build full model ID (provider/model_id)
+        let current_provider = extract_first_provider(&content).unwrap_or_default();
+        let full_model_id = if current_provider.is_empty() || model_id.starts_with(&format!("{}/", current_provider)) {
+            model_id.clone()
+        } else {
+            format!("{}/{}", current_provider, model_id)
+        };
+
         // Replace the primary model in config
-        let updated = replace_primary_model(&content, &model_id);
+        let updated = replace_primary_model(&content, &full_model_id);
         std::fs::write(&config_path, &updated)
             .map_err(|e| format!("写入配置失败: {}", e))?;
+
+        let _ = app.emit("config-updated", serde_json::json!({
+            "model": full_model_id,
+        }));
+
+        Ok(format!("✅ 默认模型已切换为: {}", full_model_id))
+    } else {
+        Err("配置文件不存在，请先配置 API Key".into())
     }
-
-    let _ = app.emit("config-updated", serde_json::json!({
-        "model": model_id,
-    }));
-
-    Ok(format!("✅ 默认模型已切换为: {}", model_id))
 }
 
 /// Open a provider's registration page
@@ -358,6 +368,13 @@ pub fn open_provider_register(provider_id: String) -> Result<String, String> {
     } else {
         Err(format!("未知的提供商: {}", provider_id))
     }
+}
+
+/// Open any URL in system browser
+#[tauri::command]
+pub fn open_url(url: String) -> Result<String, String> {
+    open::that(&url).map_err(|e| format!("打开链接失败: {}", e))?;
+    Ok(format!("已打开: {}", url))
 }
 
 /// Reset config — delete openclaw.json and auth to simulate fresh install

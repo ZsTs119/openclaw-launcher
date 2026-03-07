@@ -35,6 +35,7 @@ pub fn run() {
             config::save_api_config,
             config::set_default_model,
             config::open_provider_register,
+            config::open_url,
             config::reset_config,
         ])
         .run(tauri::generate_context!())

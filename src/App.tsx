@@ -635,7 +635,7 @@ function App() {
               </button>
               <div className="quick-actions">
                 <button className="btn-quick"
-                  onClick={() => window.open(`http://localhost:${servicePort}?token=openclaw-launcher-local`, "_blank")}
+                  onClick={() => invoke("open_url", { url: `http://localhost:${servicePort}?token=openclaw-launcher-local` })}
                   disabled={!running}>
                   🌐 打开网页端
                 </button >
