@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { Activity, Cpu, SlidersHorizontal, Settings as SettingsIcon, Hexagon, Box, Github, RefreshCw } from "lucide-react";
+import { open } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 
 // ===== Types =====
 type AppPhase = "checking" | "initializing" | "workspace" | "ready";
-type TabId = "dashboard" | "models" | "settings" | "logs";
+type TabId = "dashboard" | "models" | "settings";
 
 interface LogEntry {
   time: string;
@@ -94,6 +96,7 @@ function App() {
   const [servicePort, setServicePort] = useState(18789);
   const [workspacePath, setWorkspacePath] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+  const [activeSettingsTab, setActiveSettingsTab] = useState<"general" | "logs" | "about">("general");
   const logRef = useRef<HTMLDivElement>(null);
   const uptimeRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -112,6 +115,7 @@ function App() {
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showModelSwitchModal, setShowModelSwitchModal] = useState(false);
+  const [infoModalTitle, setInfoModalTitle] = useState("");
 
   const addLog = (level: string, message: string) => {
     const now = new Date();
@@ -442,29 +446,39 @@ function App() {
   // ===== Mandatory API Key Modal =====
   const renderKeyModal = () => {
     if (!showKeyModal) return null;
-    return (
-      <div className="modal-overlay">
-        <div className="modal-box">
-          <div className="modal-title">🔑 配置 AI 模型 API Key</div>
-          <div className="modal-desc">
-            使用 OpenClaw 需要配置一个 API Key。推荐选择免费注册的提供商，无需付费。
-          </div>
 
-          {/* Category tabs */}
-          <div className="category-tabs" style={{ marginBottom: 12 }}>
-            {Object.entries(CATEGORY_LABELS).map(([key, { label, icon }]) => (
-              <button
-                key={key}
-                className={`category-btn ${selectedCategory === key ? "active" : ""}`}
-                onClick={() => { setSelectedCategory(key); setSelectedProvider(""); setConfigStatus(""); }}
-              >
-                {icon} {label}
-              </button>
-            ))}
+    // If opened from Models tab with a pre-selected provider, skip the grid selection
+    const isDirectConfig = activeTab === "models" && selectedProvider && selectedCategory !== "custom";
+
+    return (
+      <div className="modal-overlay" onClick={() => { if (currentConfig?.has_api_key) setShowKeyModal(false); }}>
+        <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-title">
+            {isDirectConfig ? `配置 ${providers.find(p => p.id === selectedProvider)?.name}` : "🔑 配置 AI 模型 API Key"}
           </div>
+          {!isDirectConfig && (
+            <div className="modal-desc">
+              使用 OpenClaw 需要配置一个 API Key。推荐选择免费注册的提供商，无需付费。
+            </div>
+          )}
+
+          {/* Category tabs (Hide if direct config) */}
+          {!isDirectConfig && (
+            <div className="category-tabs" style={{ marginBottom: 16 }}>
+              {Object.entries(CATEGORY_LABELS).map(([key, { label, icon }]) => (
+                <button
+                  key={key}
+                  className={`category-btn ${selectedCategory === key ? "active" : ""}`}
+                  onClick={() => { setSelectedCategory(key); setSelectedProvider(""); setConfigStatus(""); }}
+                >
+                  {icon} {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {selectedCategory === "custom" ? (
-            <div className="modal-form">
+            <div className="modal-form animate-fade-in">
               <div className="form-group">
                 <label>API Base URL</label>
                 <input type="url" placeholder="https://your-relay.com/v1" value={baseUrlInput}
@@ -483,37 +497,36 @@ function App() {
             </div>
           ) : (
             <>
-              <div className="provider-list modal-providers">
-                {filteredProviders.map((p) => (
-                  <div
-                    key={p.id}
-                    className={`provider-card ${selectedProvider === p.id ? "selected" : ""}`}
-                    onClick={() => {
-                      setSelectedProvider(p.id);
-                      setBaseUrlInput(p.base_url);
-                      setSelectedModel(p.models[0]?.id || "");
-                      setConfigStatus("");
-                    }}
-                  >
-                    <div className="provider-header">
-                      <span className="provider-name">{p.name}</span>
-                      {p.category === "free" && <span className="badge-free">免费</span>}
+              {/* Provider List (Hide if direct config) */}
+              {!isDirectConfig && (
+                <div className="provider-list modal-providers animate-fade-in">
+                  {filteredProviders.map((p) => (
+                    <div
+                      key={p.id}
+                      className={`provider-card ${selectedProvider === p.id ? "selected" : ""}`}
+                      onClick={() => {
+                        setSelectedProvider(p.id);
+                        setBaseUrlInput(p.base_url);
+                        setSelectedModel(p.models[0]?.id || "");
+                        setConfigStatus("");
+                      }}
+                    >
+                      <div className="provider-header">
+                        <span className="provider-name">{p.name}</span>
+                        {p.category === "free" && <span className="badge-free">免费</span>}
+                      </div>
+                      <p className="provider-desc">{p.description}</p>
                     </div>
-                    <p className="provider-desc">{p.description}</p>
-                    <div className="provider-models">
-                      {p.models.slice(0, 3).map((m) => (
-                        <span key={m.id} className="model-tag">{m.name}</span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
 
+              {/* Config Form for selected provider */}
               {selectedProvider && (
-                <div className="modal-form" style={{ marginTop: 12 }}>
-                  <div className="form-group-row">
+                <div className="modal-form animate-fade-in" style={{ marginTop: isDirectConfig ? 0 : 16 }}>
+                  <div className="form-group-row" style={{ marginBottom: 12 }}>
                     <button className="btn-link" onClick={() => handleOpenRegister(selectedProvider)}>
-                      🔗 点击注册获取免费 Key →
+                      🔗 {selectedCategory === "free" ? "点击此处注册获取免费 API Key →" : "前往官网获取 API Key →"}
                     </button>
                   </div>
                   <div className="form-group">
@@ -522,7 +535,7 @@ function App() {
                       onChange={(e) => setApiKeyInput(e.target.value)} className="input-field" />
                   </div>
                   <div className="form-group">
-                    <label>选择模型</label>
+                    <label>选择验证模型</label>
                     <div className="model-select-list">
                       {providers.find(p => p.id === selectedProvider)?.models.map((m) => (
                         <button key={m.id}
@@ -555,13 +568,12 @@ function App() {
     <div className="app">
       <Header running={running} phase={phase} statusClass={getStatusClass()} />
 
-      {/* Tab Navigation */}
+      {/* Tab Navigation (Premium Navbar) */}
       <nav className="tab-nav">
         {([
-          { id: "dashboard" as TabId, label: "仪表盘", icon: "📊" },
-          { id: "models" as TabId, label: "模型", icon: "🤖" },
-          { id: "settings" as TabId, label: "设置", icon: "⚙️" },
-          { id: "logs" as TabId, label: "日志", icon: "📋" },
+          { id: "dashboard" as TabId, label: "仪表盘", icon: <Activity size={18} strokeWidth={1.5} /> },
+          { id: "models" as TabId, label: "AI 引擎", icon: <Cpu size={18} strokeWidth={1.5} /> },
+          { id: "settings" as TabId, label: "设置中心", icon: <SlidersHorizontal size={18} strokeWidth={1.5} /> },
         ]).map((tab) => (
           <button key={tab.id} className={`tab-btn ${activeTab === tab.id ? "active" : ""}`}
             onClick={() => setActiveTab(tab.id)}>
@@ -575,73 +587,57 @@ function App() {
         {/* ===== Dashboard Tab ===== */}
         {activeTab === "dashboard" && (
           <div className="dashboard">
-            <div className="status-cards">
-              <div className={`status-card main-card ${running ? "active" : ""}`}>
-                <div className="card-icon">{running ? "🟢" : "⚫"}</div>
-                <div className="card-info">
-                  <div className="card-label">服务状态</div>
-                  <div className="card-value">{running ? "运行中" : "已停止"}</div>
-                </div>
+            <div className="dashboard-hero">
+              <div className={`status-ring ${running ? 'running' : 'stopped'}`}>
+                {running ? <Activity size={42} strokeWidth={1.5} color="var(--accent-green)" /> : <Box size={42} strokeWidth={1.5} color="var(--text-muted)" />}
               </div>
-              <div className="status-card">
-                <div className="card-icon">⏱️</div>
-                <div className="card-info">
-                  <div className="card-label">运行时长</div>
-                  <div className="card-value">{running ? formatUptime(uptime) : "--"}</div>
-                </div>
+              <h2 className="hero-status-text">
+                {running ? "OpenClaw 核心运行中" : "引擎已就绪"}
+              </h2>
+              <div className="hero-subtext">
+                {running ? `本地接口已挂载至 localhost:${servicePort}` : "点击下方按钮启动本地 AI 驱动核心"}
               </div>
-              <div className="status-card">
-                <div className="card-icon">🌐</div>
-                <div className="card-info">
-                  <div className="card-label">访问地址</div>
-                  <div className="card-value">{running ? `localhost:${servicePort} ` : "--"}</div>
-                </div>
+
+              <div className="hero-controls">
+                <button className={`btn-primary btn-hero ${running ? "stop" : "start"}`}
+                  onClick={running ? handleStop : handleStart} disabled={loading}>
+                  {loading ? <RefreshCw className="spin" size={18} /> : (running ? "⏹ 中断服务" : "▶ 初始化并启动")}
+                </button>
+                {running && (
+                  <button className="btn-secondary btn-hero-sub animate-fade-in"
+                    onClick={() => invoke("open_url", { url: `http://localhost:${servicePort}?token=openclaw-launcher-local` })}>
+                    <Activity size={16} strokeWidth={2} /> 访问控制台
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Important info cards */}
-            <div className="info-cards">
-              <div className="info-card">
-                <div className="info-icon">🤖</div>
-                <div className="info-content">
-                  <div className="info-label">当前模型</div>
-                  <div className="info-value">{currentModelName}</div>
+            <div className="dashboard-stats">
+              <div className="stat-card" onClick={() => setShowModelSwitchModal(true)} style={{ cursor: 'pointer' }} title="点击切换模型">
+                <div className="stat-icon"><Cpu size={16} strokeWidth={2} /></div>
+                <div className="stat-details">
+                  <div className="stat-label">驱动模型 (点击切换)</div>
+                  <div className="stat-value">{currentModelName}</div>
                 </div>
-                <button className="btn-link" onClick={() => setShowModelSwitchModal(true)}>切换 →</button>
               </div>
-              <div className="info-card">
-                <div className="info-icon">🔑</div>
-                <div className="info-content">
-                  <div className="info-label">API 提供商</div>
-                  <div className="info-value">{currentProviderName}</div>
+
+              <div className="stat-card" onClick={() => setShowKeyModal(true)} style={{ cursor: 'pointer' }} title="点击配置 API">
+                <div className="stat-icon"><Hexagon size={16} strokeWidth={2} /></div>
+                <div className="stat-details">
+                  <div className="stat-label">计算节点 (提供商)</div>
+                  <div className="stat-value">{currentProviderName}</div>
                 </div>
-                <button className="btn-link" onClick={() => setShowKeyModal(true)}>配置 →</button>
               </div>
-              <div className="info-card">
-                <div className="info-icon">📂</div>
-                <div className="info-content">
-                  <div className="info-label">工作区</div>
-                  <div className="info-value truncate">{workspacePath || "OpenClaw-Projects"}</div>
+
+              <div className="stat-card">
+                <div className="stat-icon"><Activity size={16} strokeWidth={2} /></div>
+                <div className="stat-details">
+                  <div className="stat-label">连续运行时长</div>
+                  <div className="stat-value">{running ? formatUptime(uptime) : "休眠中"}</div>
                 </div>
-                <button className="btn-link" onClick={() => setActiveTab("settings")}>更改 →</button>
               </div>
             </div>
-
-            {/* Controls */}
-            <div className="control-panel">
-              <button className={`btn-start ${running ? "stop" : "start"}`}
-                onClick={running ? handleStop : handleStart} disabled={loading}>
-                {loading ? "处理中..." : running ? "⏹ 停止服务" : "▶ 启动 OpenClaw"}
-              </button>
-              <div className="quick-actions">
-                <button className="btn-quick"
-                  onClick={() => invoke("open_url", { url: `http://localhost:${servicePort}?token=openclaw-launcher-local` })}
-                  disabled={!running}>
-                  🌐 打开网页端
-                </button >
-              </div >
-            </div >
-          </div >
+          </div>
         )}
 
         {/* ===== Models Tab ===== */}
@@ -651,7 +647,7 @@ function App() {
               <h2 className="page-title">🤖 模型配置</h2>
               <p className="page-desc">选择 AI 模型提供商，配置 API Key 后即可开始使用。</p>
 
-              <div className="category-tabs">
+              <div className="category-tabs" style={{ marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)' }}>
                 {Object.entries(CATEGORY_LABELS).map(([key, { label, icon }]) => (
                   <button key={key}
                     className={`category-btn ${selectedCategory === key ? "active" : ""}`}
@@ -662,7 +658,7 @@ function App() {
               </div>
 
               {selectedCategory === "custom" ? (
-                <div className="custom-config">
+                <div className="custom-config animate-fade-in" style={{ maxWidth: 500, margin: '0 auto' }}>
                   <div className="form-group">
                     <label>API Base URL</label>
                     <input type="url" placeholder="https://your-relay.com/v1" value={baseUrlInput}
@@ -678,19 +674,25 @@ function App() {
                     <input type="text" placeholder="gpt-4o / deepseek-chat / ..." value={selectedModel}
                       onChange={(e) => setSelectedModel(e.target.value)} className="input-field" />
                   </div>
-                  <button className="btn-start start" onClick={handleSaveConfig} disabled={configSaving}>
+                  <button className="btn-primary" style={{ width: '100%', marginTop: 16, padding: '12px' }} onClick={handleSaveConfig} disabled={configSaving}>
                     {configSaving ? "保存中..." : "💾 保存配置"}
                   </button>
-                  {configStatus && <div className="config-status">{configStatus}</div>}
+                  {configStatus && <div className="config-status" style={{ marginTop: 12 }}>{configStatus}</div>}
                 </div>
               ) : (
-                <div className="provider-list">
+                <div className="provider-list animate-fade-in">
                   {filteredProviders.map((p) => (
                     <div key={p.id}
-                      className={`provider-card ${selectedProvider === p.id ? "selected" : ""}`}
-                      onClick={() => { setSelectedProvider(p.id); setBaseUrlInput(p.base_url); setSelectedModel(p.models[0]?.id || ""); setConfigStatus(""); }}>
+                      className={`provider-card ${currentConfig?.provider === p.id ? "active-provider" : ""}`}
+                      onClick={() => {
+                        setSelectedProvider(p.id);
+                        setBaseUrlInput(p.base_url);
+                        setSelectedModel(p.models[0]?.id || "");
+                        setConfigStatus("");
+                        setShowKeyModal(true);
+                      }}>
                       <div className="provider-header">
-                        <span className="provider-name">{p.name}</span>
+                        <span className="provider-name">{p.name} <span style={{ fontSize: 12, fontWeight: 'normal', color: 'var(--text-muted)' }}>{currentConfig?.provider === p.id ? " (当前使用)" : ""}</span></span>
                         {p.category === "free" && <span className="badge-free">免费</span>}
                       </div>
                       <p className="provider-desc">{p.description}</p>
@@ -703,36 +705,6 @@ function App() {
                   ))}
                 </div>
               )}
-
-              {selectedProvider && selectedCategory !== "custom" && (
-                <div className="config-panel">
-                  <div className="config-panel-header">
-                    <span>配置 {providers.find(p => p.id === selectedProvider)?.name}</span>
-                    <button className="btn-link" onClick={() => handleOpenRegister(selectedProvider)}>🔗 {selectedCategory === "free" ? "去注册获取免费 Key" : "去购买"}</button>
-                  </div>
-                  <div className="form-group">
-                    <label>API Key</label>
-                    <input type="password" placeholder="粘贴你的 API Key..." value={apiKeyInput}
-                      onChange={(e) => setApiKeyInput(e.target.value)} className="input-field" />
-                  </div>
-                  <div className="form-group">
-                    <label>选择模型</label>
-                    <div className="model-select-list">
-                      {providers.find(p => p.id === selectedProvider)?.models.map((m) => (
-                        <button key={m.id}
-                          className={`model-select-btn ${selectedModel === m.id ? "active" : ""}`}
-                          onClick={() => setSelectedModel(m.id)}>
-                          {m.name}{m.is_free && <span className="badge-free-sm">免费</span>}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <button className="btn-start start" onClick={handleSaveConfig} disabled={configSaving || !apiKeyInput}>
-                    {configSaving ? "保存中..." : "💾 保存并应用"}
-                  </button>
-                  {configStatus && <div className="config-status">{configStatus}</div>}
-                </div>
-              )}
             </div>
           )
         }
@@ -741,87 +713,148 @@ function App() {
         {
           activeTab === "settings" && (
             <div className="settings-page">
-              <h2 className="page-title">⚙️ 设置</h2>
-              <div className="settings-group">
-                <div className="setting-item">
-                  <div className="setting-left">
-                    <div className="setting-label">工作区目录</div>
-                    <div className="setting-value" style={{ fontSize: 12 }}>
-                      {workspacePath || "~/Documents/OpenClaw-Projects"}
-                    </div>
-                  </div>
-                  <button className="btn-quick" onClick={handleSwitchWorkspace}>📂 切换目录</button>
-                </div>
-                <div className="setting-item">
-                  <div className="setting-left">
-                    <div className="setting-label">服务端口</div>
-                    <div className="setting-value">{servicePort}</div>
-                  </div>
-                </div>
-                <div className="setting-item">
-                  <div className="setting-left">
-                    <div className="setting-label">版本</div>
-                    <div className="setting-value">v0.3.1</div>
-                  </div>
-                </div>
-                <div className="setting-item">
-                  <div className="setting-left">
-                    <div className="setting-label">API Key</div>
-                    <div className="setting-value">
-                      {currentConfig?.has_api_key ? "✅ 已配置" : "❌ 未配置"}
-                    </div>
-                  </div>
-                  <button className="btn-quick" onClick={() => setShowKeyModal(true)}>🔑 重新配置</button>
-                </div>
-                <div className="setting-item setting-danger">
-                  <div className="setting-left">
-                    <div className="setting-label">恢复出厂设置</div>
-                    <div className="setting-value" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                      清除所有配置，回到初始状态（模拟新用户）
-                    </div>
-                  </div>
-                  <button className="btn-danger" onClick={handleReset}>🗑️ 一键重置</button>
-                </div>
+              <div className="settings-sidebar">
+                <h2 className="sidebar-title">设置中心</h2>
+                <nav className="sidebar-nav">
+                  <button className={`sidebar-btn ${activeSettingsTab === "general" ? "active" : ""}`} onClick={() => setActiveSettingsTab("general")}>
+                    <SettingsIcon size={16} strokeWidth={1.5} /> 通用
+                  </button>
+                  <button className={`sidebar-btn ${activeSettingsTab === "logs" ? "active" : ""}`} onClick={() => setActiveSettingsTab("logs")}>
+                    <Box size={16} strokeWidth={1.5} /> 日志诊断
+                  </button>
+                  <button className={`sidebar-btn ${activeSettingsTab === "about" ? "active" : ""}`} onClick={() => setActiveSettingsTab("about")}>
+                    <Hexagon size={16} strokeWidth={1.5} /> 关于
+                  </button>
+                </nav>
               </div>
-            </div>
-          )
-        }
 
-        {/* ===== Logs Tab ===== */}
-        {
-          activeTab === "logs" && (
-            <div className="logs-page">
-              <div className="log-panel full">
-                <div className="log-header">
-                  <span>📋 运行日志</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <label className="log-toggle">
-                      <input type="checkbox" checked={showRawLogs} onChange={(e) => setShowRawLogs(e.target.checked)} />
-                      <span>原始日志</span>
-                    </label>
-                    <span>{logs.length} 条</span>
-                  </div>
-                </div>
-                <div className="log-content full-height" ref={logRef}>
-                  {logs.length === 0 ? (
-                    <div className="log-empty">暂无日志 — 点击「启动 OpenClaw」开始</div>
-                  ) : (
-                    logs.map((log, i) => {
-                      const displayMsg = !showRawLogs && log.humanized ? log.humanized : log.message;
-                      return (
-                        <div className="log-line" key={i}>
-                          <span className="log-time">{log.time}</span>
-                          <span className={`log-msg ${log.level}`}>{displayMsg}</span>
+              <div className="settings-content-area">
+                {activeSettingsTab === "general" && (
+                  <div className="settings-group animate-fade-in">
+                    <h3 className="settings-section-title">🎛️ 通用设置</h3>
+                    <div className="setting-item">
+                      <div className="setting-left">
+                        <div className="setting-label">工作区目录</div>
+                        <div className="setting-value" style={{ fontSize: 13, userSelect: 'text' }}>
+                          {workspacePath || "~/Documents/OpenClaw-Projects"}
                         </div>
-                      );
-                    })
-                  )}
-                </div>
+                      </div>
+                      <button className="btn-secondary" onClick={handleSwitchWorkspace}>📂 更改</button>
+                    </div>
+
+                    <div className="setting-item">
+                      <div className="setting-left">
+                        <div className="setting-label">服务端口</div>
+                        <div className="setting-value">{servicePort}</div>
+                      </div>
+                    </div>
+
+                    <div className="setting-item">
+                      <div className="setting-left">
+                        <div className="setting-label">API Key 状态</div>
+                        <div className="setting-value">
+                          {currentConfig?.has_api_key ? "✅ 已配置" : "❌ 未配置"}
+                        </div>
+                      </div>
+                      <button className="btn-secondary" onClick={() => setShowKeyModal(true)}>🔑 生命周期重配</button>
+                    </div>
+
+                    <div className="setting-item setting-danger" style={{ marginTop: 24 }}>
+                      <div className="setting-left">
+                        <div className="setting-label" style={{ color: 'var(--accent-red)' }}>恢复出厂设置</div>
+                        <div className="setting-value" style={{ fontSize: 12 }}>
+                          抹除 openclaw.json 与 API Key 等敏感信息，回到纯净状态
+                        </div>
+                      </div>
+                      <button className="btn-danger" onClick={handleReset}>🗑️ 擦除数据</button>
+                    </div>
+                  </div>
+                )}
+
+                {activeSettingsTab === "logs" && (
+                  <div className="settings-group animate-fade-in">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <h3 className="settings-section-title" style={{ margin: 0 }}>📄 日志诊断</h3>
+                      <button className="btn-primary" style={{ padding: '6px 16px', fontSize: 13 }}>
+                        📦 导出诊断 ZIP
+                      </button>
+                    </div>
+                    <div className="log-panel" style={{ height: 380, borderRadius: 'var(--radius)' }}>
+                      <div className="log-header" style={{ padding: '8px 12px', background: 'rgba(0,0,0,0.3)' }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12 }}>
+                          <label className="log-toggle" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                            <input type="checkbox" checked={showRawLogs} onChange={(e) => setShowRawLogs(e.target.checked)} />
+                            <span>显示原始日志流</span>
+                          </label>
+                        </div>
+                      </div>
+                      <div className="log-content full-height" ref={logRef} style={{ padding: 12, fontSize: 12 }}>
+                        {logs.length === 0 ? (
+                          <div className="log-empty">暂无活动日志</div>
+                        ) : (
+                          logs.slice(-20).map((log, i) => { // Only show latest 20 to keep it slick
+                            const displayMsg = !showRawLogs && log.humanized ? log.humanized : log.message;
+                            return (
+                              <div className="log-line" key={i}>
+                                <span className="log-time" style={{ opacity: 0.5 }}>{log.time}</span>
+                                <span className={`log-msg ${log.level}`}>{displayMsg}</span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeSettingsTab === "about" && (
+                  <div className="settings-group animate-fade-in about-section">
+                    <div className="about-hero">
+                      <div className="about-logo">OpenClaw</div>
+                      <div className="about-title">新一代 AI 本地驱动核心</div>
+                      <div className="about-version-card">
+                        <span>当前版本 v0.3.1</span>
+                        <button className="btn-ghost" title="检查更新">
+                          <RefreshCw size={14} strokeWidth={2} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="about-links">
+                      <button className="about-link-card" onClick={() => invoke("open_url", { url: "https://github.com/ZsTs119/openclaw-launcher" })}>
+                        <Github size={18} strokeWidth={1.5} />
+                        <div className="link-text">查看 GitHub 源码</div>
+                      </button>
+                      <button className="about-link-card" onClick={() => setInfoModalTitle("💬 关注微信公众号 / 加入交流群")}>
+                        <span style={{ fontSize: 18 }}>💬</span>
+                        <div className="link-text">加入交流群 / 联系作者</div>
+                      </button>
+                      <button className="about-link-card" onClick={() => setInfoModalTitle("☕ 赞赏与支持")}>
+                        <span style={{ fontSize: 18 }}>☕</span>
+                        <div className="link-text">赞赏与支持项目发展</div>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )
         }
       </div >
+
+      {/* Generic Info / QR Code Modal */}
+      {infoModalTitle && (
+        <div className="modal-overlay" onClick={() => setInfoModalTitle("")}>
+          <div className="modal-box" style={{ maxWidth: 360, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">{infoModalTitle}</div>
+            <div className="modal-desc" style={{ marginTop: 16, marginBottom: 24, padding: 32, background: 'var(--bg-card)', borderRadius: 'var(--radius)' }}>
+              <div style={{ color: 'var(--text-muted)' }}>[ 二维码图片占位符 ]</div>
+              <div style={{ fontSize: 12, marginTop: 12 }}>请在 assets 文件夹替换为你个人的二维码图片</div>
+            </div>
+            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setInfoModalTitle("")}>关闭</button>
+          </div>
+        </div>
+      )}
 
       {/* Model Switch Modal */}
       {showModelSwitchModal && (
