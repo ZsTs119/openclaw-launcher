@@ -30,7 +30,7 @@ export function RepairToast({ show, repairing, onRepair, onDismiss }: RepairToas
                     }}
                 >
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 4, color: '#ff6b6b' }}><AlertTriangle size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />检测到连接认证失败</div>
+                        <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--accent-red)' }}><AlertTriangle size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />检测到连接认证失败</div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted, #888)' }}>
                             设备签名校验异常，点击一键修复（重启服务 + 刷新会话）
                         </div>
