@@ -10,9 +10,25 @@ use std::os::windows::process::CommandExt;
 use crate::environment;
 use crate::openclaw;
 
-/// Check if a port is available by trying to bind to it
+/// Check if a port is truly available by:
+/// 1. Trying to bind to it (standard OS check)
+/// 2. Trying to connect to it (catches WSL2 port forwarding — WSL binds 0.0.0.0
+///    which gets forwarded to Windows localhost, but Windows bind("127.0.0.1") still succeeds)
 fn is_port_available(port: u16) -> bool {
-    TcpListener::bind(("127.0.0.1", port)).is_ok()
+    // Layer 1: Can we bind to it?
+    if TcpListener::bind(("127.0.0.1", port)).is_err() {
+        return false;
+    }
+    // Layer 2: Is anything already responding on this port?
+    // This catches WSL2 forwarded ports that pass the bind check
+    use std::net::TcpStream;
+    match TcpStream::connect_timeout(
+        &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
+        std::time::Duration::from_millis(200),
+    ) {
+        Ok(_) => false,  // Something is listening — port is NOT available
+        Err(_) => true,   // Nothing responded — port is truly free
+    }
 }
 
 /// Check if OpenClaw gateway port is available (exposed to frontend)
