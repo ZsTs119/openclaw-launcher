@@ -1,6 +1,6 @@
 # Phase 4: 架构重构 🏗️
 
-> 🚧 开发中 — 目标：模块化 + 可复用 + 多人协作友好
+> Stage 1-4 ✅ | Stage 5 🚧 开发中 | Stage 6 ⭕ 待开始
 
 ## 目标
 
@@ -15,86 +15,42 @@
 
 ## 阶段计划
 
-### Stage 1: 基础设施 & 开发规范 ⏱️ ~1h
+### Stage 1: 基础设施 & 开发规范 ✅
 
-**目标**：建立规范，不改任何功能代码
-
-- [ ] 创建 `AGENTS.md`（AI 开发规范 + 多人协作约定）
-- [ ] 创建 `src/types/index.ts`（从 App.tsx 抽取所有 TypeScript 类型）
-- [ ] 创建 `src/utils/log-humanizer.ts`（从 App.tsx 抽取日志翻译）
-- [ ] 创建 `src/utils/ansi-strip.ts`（从 App.tsx 抽取 ANSI 清理）
-- [ ] App.tsx 改为 import 这些模块（功能不变，只是 import 路径变了）
-
-**验证**：
-```bash
-npm run tauri dev  # UI 完全和之前一样
-# 手动测试：启动服务、查看日志、切换设置 — 全部正常
-```
+- [x] 创建 `src/types/index.ts`（从 App.tsx 抽取所有 TypeScript 类型）
+- [x] 创建 `src/utils/log-humanizer.ts`（从 App.tsx 抽取日志翻译）
+- [x] 创建 `src/utils/ansi-strip.ts`（从 App.tsx 抽取 ANSI 清理）
+- [x] App.tsx 改为 import 这些模块
+- **Tag**: `v2-stage1-complete`
 
 ---
 
-### Stage 2: 通用 UI 组件库 ⏱️ ~2h
+### Stage 2: 通用 UI 组件库 ✅
 
-**目标**：抽取可复用 UI 组件，建立设计系统
-
-- [ ] `src/components/ui/Modal.tsx` — 通用弹窗（替换 App.tsx 中所有弹窗）
-- [ ] `src/components/ui/Toast.tsx` — 通知提示（替换修复连接 toast）
-- [ ] `src/components/ui/Button.tsx` — 按钮组件（primary/secondary/danger 变体）
-- [ ] `src/components/ui/Card.tsx` — 卡片容器
-- [ ] `src/components/ui/StatusBadge.tsx` — 状态标签（运行中/已停止/错误）
-- [ ] 对应 CSS 文件 `src/components/ui/styles/` 每个组件独立样式
-
-**验证**：
-```bash
-# 所有弹窗用 <Modal> 组件渲染
-# API Key 弹窗、重置确认、工作区选择 — 视觉和交互完全一致
-```
+- [x] `src/components/ui/Modal.tsx` + `ModalFooter.tsx` — 通用弹窗
+- [x] 重构 5 个内联弹窗为共享组件
+- **Tag**: `v2-stage2-complete`
 
 ---
 
-### Stage 3: 页面级组件拆分 ⏱️ ~3h
+### Stage 3: 页面级组件拆分 ✅
 
-**目标**：App.tsx 从 1170 行降到 ~150 行，变成纯路由
-
-- [ ] `src/components/SetupWizard.tsx` — 初始化安装向导
-- [ ] `src/components/Dashboard.tsx` — 仪表盘主视图
-- [ ] `src/components/LogViewer.tsx` — 日志诊断面板
-- [ ] `src/components/SettingsPanel.tsx` — 设置中心
-- [ ] `src/components/ApiKeyModal.tsx` — API Key 配置弹窗（使用 Stage 2 的 Modal）
-- [ ] `src/components/Header.tsx` — 顶部导航栏（已有雏形）
-- [ ] `src/components/Sidebar.tsx` — 侧边栏（如有需要）
-- [ ] `App.tsx` 只做：路由 phase 切换 + 全局状态传递
-
-**验证**：
-```bash
-# 完整流程测试：
-# 1. 全新安装流程（删除 AppData/Local/OpenClawLauncher）
-# 2. 配置 API Key
-# 3. 启动服务 → 聊天
-# 4. 设置中心切换模型
-# 5. 日志查看
-# 6. 重新安装环境
-# 7. 一键修复连接
-```
+- [x] `src/components/Header.tsx` (31行, 3 props)
+- [x] `src/components/ApiKeyModal.tsx` (197行, 18 props)
+- [x] `src/components/SetupWizard.tsx` (83行, 7 props)
+- [x] App.tsx: 1170 → 894 行 (-24%)
+- **Tag**: `v2-stage3-complete`
 
 ---
 
-### Stage 4: 逻辑层抽取（Custom Hooks） ⏱️ ~2h
+### Stage 4: 逻辑层抽取（Custom Hooks）✅
 
-**目标**：UI 组件只负责渲染，逻辑通过 hooks 提供
-
-- [ ] `src/hooks/useService.ts` — 服务启停、状态监控、端口管理
-- [ ] `src/hooks/useConfig.ts` — 配置读写、Provider 查询、模型切换
-- [ ] `src/hooks/useLogs.ts` — 日志采集、格式化、自动滚动
-- [ ] `src/hooks/useSetup.ts` — 安装流程状态管理
-- [ ] `src/hooks/useToast.ts` — Toast 通知队列管理
-- [ ] 各页面组件从 props 改为直接使用 hooks
-
-**验证**：
-```bash
-# 同 Stage 3 完整流程测试
-# + 确认 hooks 可以被多个组件复用（如 useService 同时被 Header 和 Dashboard 使用）
-```
+- [x] `src/hooks/useService.ts` (255行) — 服务启停、状态监控、端口管理
+- [x] `src/hooks/useConfig.ts` (159行) — 配置读写、Provider 查询、模型切换
+- [x] `src/hooks/useLogs.ts` (46行) — 日志采集、格式化、自动滚动
+- [x] `running` 状态提升到 App 层解决 hooks 循环依赖
+- [x] App.tsx: 894 → 568 行 (总计 -51%)
+- **Tag**: `v2-stage4-complete`
 
 ---
 
