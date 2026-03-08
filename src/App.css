@@ -704,10 +704,16 @@ body {
 
 .settings-content-area {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  position: relative;
   min-width: 0;
-  height: 100%;
+}
+
+.settings-content-scroll {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   overflow-y: auto;
   padding-bottom: 24px;
 }
