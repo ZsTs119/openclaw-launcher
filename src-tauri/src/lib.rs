@@ -33,6 +33,7 @@ pub fn run() {
             // Config & API Key management
             config::get_providers,
             config::get_current_config,
+            config::migrate_gateway_config,
             config::save_api_config,
             config::set_default_model,
             config::open_provider_register,

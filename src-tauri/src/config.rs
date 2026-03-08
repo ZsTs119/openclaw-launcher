@@ -147,6 +147,56 @@ pub fn get_providers() -> Vec<ProviderInfo> {
 }
 
 
+/// Migrate the gateway config at ~/.openclaw/openclaw.json to ensure
+/// device auth is disabled and auth mode is set correctly for local Launcher use.
+/// This must target ~/.openclaw/ (get_user_openclaw_dir) because that's where
+/// the gateway actually reads its config — NOT the sandbox engine directory.
+#[tauri::command]
+pub fn migrate_gateway_config() -> Result<String, String> {
+    let openclaw_dir = get_user_openclaw_dir()?;
+    let config_path = openclaw_dir.join("openclaw.json");
+
+    if !config_path.exists() {
+        return Ok("No config to migrate yet".to_string());
+    }
+
+    let content = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("读取配置失败: {}", e))?;
+
+    // Already has the fix? Skip.
+    if content.contains("dangerouslyDisableDeviceAuth") {
+        return Ok("Config already has device auth disabled".to_string());
+    }
+
+    // Patch the config
+    let mut patched = content.clone();
+
+    // Add controlUi block before "auth": in gateway section
+    if patched.contains("\"gateway\"") && !patched.contains("\"controlUi\"") {
+        patched = patched.replace(
+            "\"auth\":",
+            "\"controlUi\": {\n      \"allowInsecureAuth\": true,\n      \"dangerouslyDisableDeviceAuth\": true\n    },\n    \"auth\":",
+        );
+    }
+
+    // Add auth.mode: "token" if missing
+    if !patched.contains("\"mode\": \"token\"") && patched.contains("\"token\":") {
+        patched = patched.replace(
+            "\"auth\": {",
+            "\"auth\": {\n      \"mode\": \"token\",",
+        );
+    }
+
+    if patched != content {
+        std::fs::write(&config_path, &patched)
+            .map_err(|e| format!("写入配置失败: {}", e))?;
+        return Ok("✅ 已修补网关配置：禁用设备签名校验".to_string());
+    }
+
+    Ok("Config unchanged".to_string())
+}
+
+
 /// Get current OpenClaw config status
 #[tauri::command]
 pub fn get_current_config() -> Result<CurrentConfig, String> {

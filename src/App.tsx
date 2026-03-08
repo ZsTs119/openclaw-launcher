@@ -230,6 +230,8 @@ function App() {
 
   const checkApiKey = async () => {
     try {
+      // Ensure gateway config has correct auth fields (patches ~/.openclaw/openclaw.json)
+      await invoke("migrate_gateway_config").catch(() => { });
       const config = await invoke<CurrentConfig>("get_current_config");
       setCurrentConfig(config);
       if (!config.has_api_key) {
