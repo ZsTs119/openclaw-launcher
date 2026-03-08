@@ -1,6 +1,6 @@
-# Phase 4.6: 最终打磨 — App.tsx 降至 ~150 行 🔧
+# Phase 4.6: 最终打磨 — App.tsx 降至 ~150 行 ✅
 
-> 📋 待开始 — 目标：App.tsx 成为纯路由层，所有 UI 组件独立可编辑
+> ✅ 完成 — `v2-phase4.6-complete`
 
 ## 背景
 

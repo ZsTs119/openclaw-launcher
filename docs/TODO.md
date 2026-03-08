@@ -100,9 +100,9 @@
 - [x] Stage 8: Tab 页面组件拆分 ✅ `v2-stage8-complete`
 - [x] Stage 9: config.rs 职责拆分 ✅ `v2-stage9-complete`
 
-## 🔧 Phase 4.6: 最终打磨（App.tsx → ~150 行）
-- [ ] Stage 10: 弹窗组件提取（ModelSwitchModal/ConfirmModal/RepairToast）🚧
-- [ ] Stage 11: useService Hook 拆分（253→~130+130行）
+## 🔧 Phase 4.6: 最终打磨（App.tsx → ~150 行）✅
+- [x] Stage 10: 弹窗组件提取 ✅ `v2-stage10-complete`
+- [x] Stage 11: useService Hook 拆分 ✅ `v2-stage11-complete`
 
 ## 🏢 Phase 5: 企业级分发
 - [ ] Sentry 错误上报 (opt-in)
