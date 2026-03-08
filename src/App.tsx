@@ -20,6 +20,7 @@ import { ConfirmModal } from "./components/ConfirmModal";
 import { RepairToast } from "./components/RepairToast";
 import { useLogs } from "./hooks/useLogs";
 import { useConfig } from "./hooks/useConfig";
+import { useSetup } from "./hooks/useSetup";
 import { useService } from "./hooks/useService";
 
 // ===== App =====
@@ -51,13 +52,28 @@ function App() {
   } = useConfig({ addLog, running, setRunning });
 
   const {
-    phase, loading,
-    progress, progressMsg, uptime, servicePort,
-    workspacePath, reinstalling, repairing,
+    phase, setPhase,
+    loading: setupLoading,
+    progress, setProgress,
+    progressMsg, setProgressMsg,
+    workspacePath,
     handleSelectFolder, handleConfirmWorkspace, handleSwitchWorkspace,
+  } = useSetup({ addLog, checkApiKey, setRunning });
+
+  const {
+    loading: serviceLoading,
+    uptime, servicePort,
+    reinstalling, repairing,
     handleStart, handleStop,
     confirmReinstall, handleRepairConnection,
-  } = useService({ addLog, checkApiKey, setRepairToast, setShowReinstallModal, running, setRunning });
+  } = useService({
+    addLog, checkApiKey, setRepairToast, setShowReinstallModal,
+    running, setRunning,
+    setPhase, setProgress, setProgressMsg,
+  });
+
+  // Combined loading state: either hook might be loading
+  const loading = setupLoading || serviceLoading;
 
   const getStatusClass = () => {
     if (loading) return "loading";
