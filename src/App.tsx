@@ -43,6 +43,7 @@ function App() {
   // Mandatory API Key modal
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+  const [showReinstallModal, setShowReinstallModal] = useState(false);
   const [showModelSwitchModal, setShowModelSwitchModal] = useState(false);
   const [infoModalTitle, setInfoModalTitle] = useState("");
   const [repairToast, setRepairToast] = useState(false);
@@ -321,8 +322,12 @@ function App() {
 
   const [reinstalling, setReinstalling] = useState(false);
 
-  const handleReinstall = async () => {
-    if (!confirm("确定要重新安装运行环境吗？\n\n这将删除 node_modules 并重新下载所有依赖，可能需要几分钟。\n\n适用于安装出错或环境损坏的情况。")) return;
+  const handleReinstall = () => {
+    setShowReinstallModal(true);
+  };
+
+  const confirmReinstall = async () => {
+    setShowReinstallModal(false);
     setReinstalling(true);
     setPhase("initializing");
     setProgress(0);
@@ -1017,6 +1022,42 @@ function App() {
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
                 <button className="btn-secondary" onClick={() => setShowResetModal(false)}>取消</button>
                 <button className="btn-danger" onClick={confirmReset}>确认重置</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Reinstall Confirmation Modal */}
+      <AnimatePresence>
+        {showReinstallModal && (
+          <motion.div
+            className="modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="modal-box"
+              style={{ maxWidth: 420 }}
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+            >
+              <div className="modal-title">🔄 重新安装运行环境</div>
+              <div className="modal-desc" style={{ textAlign: "left" }}>
+                <p style={{ marginBottom: 12 }}>这将删除 node_modules 并重新下载所有依赖，可能需要几分钟。</p>
+                <p style={{ color: "var(--accent-green)", marginBottom: 4 }}>适用于：</p>
+                <ul style={{ paddingLeft: 20, marginBottom: 12, color: "var(--text-secondary)" }}>
+                  <li>安装过程出错</li>
+                  <li>环境损坏或依赖缺失</li>
+                  <li>版本升级后不兼容</li>
+                </ul>
+                <p style={{ color: "var(--text-secondary)", fontSize: 12 }}>⏱️ 根据网络情况，可能需要 3-10 分钟</p>
+              </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
+                <button className="btn-secondary" onClick={() => setShowReinstallModal(false)}>取消</button>
+                <button className="btn-danger" onClick={confirmReinstall}>确认重新安装</button>
               </div>
             </motion.div>
           </motion.div>
