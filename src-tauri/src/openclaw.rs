@@ -433,7 +433,32 @@ pub fn inject_default_config(app: tauri::AppHandle) -> Result<String, String> {
     let config_path = openclaw_dir.join("openclaw.json");
 
     if config_path.exists() {
-        return Ok("Config already exists, skipping".to_string());
+        // Migration: patch existing config to add dangerouslyDisableDeviceAuth if missing
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            if !content.contains("dangerouslyDisableDeviceAuth") {
+                // Need to add the controlUi config to bypass device signature checks
+                let patched = if content.contains("\"controlUi\"") {
+                    content.clone() // already has controlUi section, skip
+                } else if content.contains("\"gateway\"") {
+                    // Insert controlUi block into existing gateway section
+                    content.replace(
+                        "\"auth\":",
+                        "\"controlUi\": {\n      \"dangerouslyDisableDeviceAuth\": true\n    },\n    \"auth\":",
+                    )
+                } else {
+                    content.clone() // no gateway section at all, skip
+                };
+                if patched != content {
+                    let _ = std::fs::write(&config_path, &patched);
+                    let _ = app.emit("setup-progress", serde_json::json!({
+                        "stage": "config_migrate",
+                        "message": "✅ 已自动修补配置：禁用设备签名校验",
+                        "percent": 96
+                    }));
+                }
+            }
+        }
+        return Ok("Config already exists (checked for migration)".to_string());
     }
 
     // Default workspace: ~/Documents/OpenClaw-Projects
@@ -463,6 +488,9 @@ pub fn inject_default_config(app: tauri::AppHandle) -> Result<String, String> {
     "mode": "local",
     "auth": {{
       "token": "openclaw-launcher-local"
+    }},
+    "controlUi": {{
+      "dangerouslyDisableDeviceAuth": true
     }}
   }},
   "sandbox": {{

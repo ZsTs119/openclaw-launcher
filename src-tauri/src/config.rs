@@ -273,6 +273,9 @@ pub fn save_api_config(
     "mode": "local",
     "auth": {{
       "token": "openclaw-launcher-local"
+    }},
+    "controlUi": {{
+      "dangerouslyDisableDeviceAuth": true
     }}
   }}
 }}"#,
