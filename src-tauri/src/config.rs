@@ -43,108 +43,17 @@ pub struct CurrentConfig {
     pub base_url: Option<String>,
 }
 
-/// Return the list of supported providers
+/// Return the list of supported providers (loaded from providers.json)
 #[tauri::command]
 pub fn get_providers() -> Vec<ProviderInfo> {
-    vec![
-        // ===== 🆓 免费注册 =====
-        ProviderInfo {
-            id: "openrouter".into(),
-            name: "OpenRouter".into(),
-            category: "free".into(),
-            base_url: "https://openrouter.ai/api/v1".into(),
-            register_url: "https://openrouter.ai/keys".into(),
-            description: "聚合多家模型，免费模型无限用".into(),
-            api_type: "openai-completions".into(),
-            models: vec![
-                ModelInfo { id: "google/gemini-2.0-flash-exp:free".into(), name: "Gemini 2.0 Flash (免费)".into(), provider: "openrouter".into(), is_free: true, context_window: 1000000, max_tokens: 65536 },
-                ModelInfo { id: "meta-llama/llama-4-maverick:free".into(), name: "Llama 4 Maverick (免费)".into(), provider: "openrouter".into(), is_free: true, context_window: 131072, max_tokens: 32768 },
-                ModelInfo { id: "qwen/qwen3-235b-a22b:free".into(), name: "Qwen3 235B (免费)".into(), provider: "openrouter".into(), is_free: true, context_window: 262144, max_tokens: 65536 },
-            ],
-        },
-        ProviderInfo {
-            id: "groq".into(),
-            name: "Groq".into(),
-            category: "free".into(),
-            base_url: "https://api.groq.com/openai/v1".into(),
-            register_url: "https://console.groq.com/keys".into(),
-            description: "免费注册，超快推理速度".into(),
-            api_type: "openai-completions".into(),
-            models: vec![
-                ModelInfo { id: "llama-3.3-70b-versatile".into(), name: "Llama 3.3 70B".into(), provider: "groq".into(), is_free: true, context_window: 131072, max_tokens: 32768 },
-                ModelInfo { id: "gemma2-9b-it".into(), name: "Gemma2 9B".into(), provider: "groq".into(), is_free: true, context_window: 8192, max_tokens: 8192 },
-            ],
-        },
-        ProviderInfo {
-            id: "siliconflow".into(),
-            name: "SiliconFlow 硅基流动".into(),
-            category: "free".into(),
-            base_url: "https://api.siliconflow.cn/v1".into(),
-            register_url: "https://cloud.siliconflow.cn/".into(),
-            description: "国内免费注册，DeepSeek V3 免费可用".into(),
-            api_type: "openai-completions".into(),
-            models: vec![
-                ModelInfo { id: "deepseek-ai/DeepSeek-V3".into(), name: "DeepSeek V3".into(), provider: "siliconflow".into(), is_free: true, context_window: 131072, max_tokens: 65536 },
-            ],
-        },
-        // ===== 🔥 Coding Plan 服务商 =====
-        ProviderInfo {
-            id: "bailian".into(),
-            name: "阿里云百炼".into(),
-            category: "provider".into(),
-            base_url: "https://coding.dashscope.aliyuncs.com/v1".into(),
-            register_url: "https://bailian.console.aliyun.com/".into(),
-            description: "聚合多家顶级模型，支持 Qwen3/Kimi/GLM/MiniMax".into(),
-            api_type: "openai-completions".into(),
-            models: vec![
-                ModelInfo { id: "qwen3.5-plus".into(), name: "Qwen3.5 Plus".into(), provider: "bailian".into(), is_free: false, context_window: 1000000, max_tokens: 65536 },
-                ModelInfo { id: "qwen3-coder-plus".into(), name: "Qwen3 Coder Plus".into(), provider: "bailian".into(), is_free: false, context_window: 1000000, max_tokens: 65536 },
-                ModelInfo { id: "MiniMax-M2.5".into(), name: "MiniMax M2.5".into(), provider: "bailian".into(), is_free: false, context_window: 204800, max_tokens: 131072 },
-                ModelInfo { id: "glm-5".into(), name: "GLM 5".into(), provider: "bailian".into(), is_free: false, context_window: 202752, max_tokens: 16384 },
-                ModelInfo { id: "kimi-k2.5".into(), name: "Kimi K2.5".into(), provider: "bailian".into(), is_free: false, context_window: 262144, max_tokens: 32768 },
-                ModelInfo { id: "glm-4.7".into(), name: "GLM 4.7".into(), provider: "bailian".into(), is_free: false, context_window: 202752, max_tokens: 16384 },
-            ],
-        },
-        ProviderInfo {
-            id: "zhipu".into(),
-            name: "智谱 AI".into(),
-            category: "provider".into(),
-            base_url: "https://open.bigmodel.cn/api/paas/v4/".into(),
-            register_url: "https://open.bigmodel.cn/".into(),
-            description: "GLM 系列旗舰编程模型，SWE-bench 领先".into(),
-            api_type: "openai-completions".into(),
-            models: vec![
-                ModelInfo { id: "glm-5".into(), name: "GLM 5".into(), provider: "zhipu".into(), is_free: false, context_window: 202752, max_tokens: 16384 },
-                ModelInfo { id: "glm-4.7".into(), name: "GLM 4.7".into(), provider: "zhipu".into(), is_free: false, context_window: 202752, max_tokens: 16384 },
-                ModelInfo { id: "glm-4.6".into(), name: "GLM 4.6".into(), provider: "zhipu".into(), is_free: false, context_window: 202752, max_tokens: 16384 },
-            ],
-        },
-        ProviderInfo {
-            id: "minimax".into(),
-            name: "MiniMax".into(),
-            category: "provider".into(),
-            base_url: "https://api.minimaxi.com/v1".into(),
-            register_url: "https://platform.minimaxi.com/".into(),
-            description: "M2.5 旗舰编程模型，专为 Agent 场景设计".into(),
-            api_type: "openai-completions".into(),
-            models: vec![
-                ModelInfo { id: "MiniMax-M2.5".into(), name: "MiniMax M2.5".into(), provider: "minimax".into(), is_free: false, context_window: 204800, max_tokens: 131072 },
-                ModelInfo { id: "MiniMax-M2.1".into(), name: "MiniMax M2.1".into(), provider: "minimax".into(), is_free: false, context_window: 204800, max_tokens: 131072 },
-            ],
-        },
-        // ===== 🔧 自定义中转站 =====
-        ProviderInfo {
-            id: "custom".into(),
-            name: "自定义中转站".into(),
-            category: "custom".into(),
-            base_url: "".into(),
-            register_url: "".into(),
-            description: "填入自有 API 地址和密钥，支持任何 OpenAI 兼容接口".into(),
-            api_type: "openai-completions".into(),
-            models: vec![],
-        },
-    ]
+    let json_str = include_str!("../resources/providers.json");
+    serde_json::from_str(json_str).unwrap_or_else(|e| {
+        eprintln!("Failed to parse providers.json: {}", e);
+        vec![]
+    })
 }
+
+
 
 
 /// Migrate the gateway config at ~/.openclaw/openclaw.json to ensure

@@ -1,0 +1,214 @@
+[
+    {
+        "id": "openrouter",
+        "name": "OpenRouter",
+        "category": "free",
+        "base_url": "https://openrouter.ai/api/v1",
+        "register_url": "https://openrouter.ai/keys",
+        "description": "聚合多家模型，免费模型无限用",
+        "api_type": "openai-completions",
+        "models": [
+            {
+                "id": "google/gemini-2.0-flash-exp:free",
+                "name": "Gemini 2.0 Flash (免费)",
+                "provider": "openrouter",
+                "is_free": true,
+                "context_window": 1000000,
+                "max_tokens": 65536
+            },
+            {
+                "id": "meta-llama/llama-4-maverick:free",
+                "name": "Llama 4 Maverick (免费)",
+                "provider": "openrouter",
+                "is_free": true,
+                "context_window": 131072,
+                "max_tokens": 32768
+            },
+            {
+                "id": "qwen/qwen3-235b-a22b:free",
+                "name": "Qwen3 235B (免费)",
+                "provider": "openrouter",
+                "is_free": true,
+                "context_window": 262144,
+                "max_tokens": 65536
+            }
+        ]
+    },
+    {
+        "id": "groq",
+        "name": "Groq",
+        "category": "free",
+        "base_url": "https://api.groq.com/openai/v1",
+        "register_url": "https://console.groq.com/keys",
+        "description": "免费注册，超快推理速度",
+        "api_type": "openai-completions",
+        "models": [
+            {
+                "id": "llama-3.3-70b-versatile",
+                "name": "Llama 3.3 70B",
+                "provider": "groq",
+                "is_free": true,
+                "context_window": 131072,
+                "max_tokens": 32768
+            },
+            {
+                "id": "gemma2-9b-it",
+                "name": "Gemma2 9B",
+                "provider": "groq",
+                "is_free": true,
+                "context_window": 8192,
+                "max_tokens": 8192
+            }
+        ]
+    },
+    {
+        "id": "siliconflow",
+        "name": "SiliconFlow 硅基流动",
+        "category": "free",
+        "base_url": "https://api.siliconflow.cn/v1",
+        "register_url": "https://cloud.siliconflow.cn/",
+        "description": "国内免费注册，DeepSeek V3 免费可用",
+        "api_type": "openai-completions",
+        "models": [
+            {
+                "id": "deepseek-ai/DeepSeek-V3",
+                "name": "DeepSeek V3",
+                "provider": "siliconflow",
+                "is_free": true,
+                "context_window": 131072,
+                "max_tokens": 65536
+            }
+        ]
+    },
+    {
+        "id": "bailian",
+        "name": "阿里云百炼",
+        "category": "provider",
+        "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+        "register_url": "https://bailian.console.aliyun.com/",
+        "description": "聚合多家顶级模型，支持 Qwen3/Kimi/GLM/MiniMax",
+        "api_type": "openai-completions",
+        "models": [
+            {
+                "id": "qwen3.5-plus",
+                "name": "Qwen3.5 Plus",
+                "provider": "bailian",
+                "is_free": false,
+                "context_window": 1000000,
+                "max_tokens": 65536
+            },
+            {
+                "id": "qwen3-coder-plus",
+                "name": "Qwen3 Coder Plus",
+                "provider": "bailian",
+                "is_free": false,
+                "context_window": 1000000,
+                "max_tokens": 65536
+            },
+            {
+                "id": "MiniMax-M2.5",
+                "name": "MiniMax M2.5",
+                "provider": "bailian",
+                "is_free": false,
+                "context_window": 204800,
+                "max_tokens": 131072
+            },
+            {
+                "id": "glm-5",
+                "name": "GLM 5",
+                "provider": "bailian",
+                "is_free": false,
+                "context_window": 202752,
+                "max_tokens": 16384
+            },
+            {
+                "id": "kimi-k2.5",
+                "name": "Kimi K2.5",
+                "provider": "bailian",
+                "is_free": false,
+                "context_window": 262144,
+                "max_tokens": 32768
+            },
+            {
+                "id": "glm-4.7",
+                "name": "GLM 4.7",
+                "provider": "bailian",
+                "is_free": false,
+                "context_window": 202752,
+                "max_tokens": 16384
+            }
+        ]
+    },
+    {
+        "id": "zhipu",
+        "name": "智谱 AI",
+        "category": "provider",
+        "base_url": "https://open.bigmodel.cn/api/paas/v4/",
+        "register_url": "https://open.bigmodel.cn/",
+        "description": "GLM 系列旗舰编程模型，SWE-bench 领先",
+        "api_type": "openai-completions",
+        "models": [
+            {
+                "id": "glm-5",
+                "name": "GLM 5",
+                "provider": "zhipu",
+                "is_free": false,
+                "context_window": 202752,
+                "max_tokens": 16384
+            },
+            {
+                "id": "glm-4.7",
+                "name": "GLM 4.7",
+                "provider": "zhipu",
+                "is_free": false,
+                "context_window": 202752,
+                "max_tokens": 16384
+            },
+            {
+                "id": "glm-4.6",
+                "name": "GLM 4.6",
+                "provider": "zhipu",
+                "is_free": false,
+                "context_window": 202752,
+                "max_tokens": 16384
+            }
+        ]
+    },
+    {
+        "id": "minimax",
+        "name": "MiniMax",
+        "category": "provider",
+        "base_url": "https://api.minimaxi.com/v1",
+        "register_url": "https://platform.minimaxi.com/",
+        "description": "M2.5 旗舰编程模型，专为 Agent 场景设计",
+        "api_type": "openai-completions",
+        "models": [
+            {
+                "id": "MiniMax-M2.5",
+                "name": "MiniMax M2.5",
+                "provider": "minimax",
+                "is_free": false,
+                "context_window": 204800,
+                "max_tokens": 131072
+            },
+            {
+                "id": "MiniMax-M2.1",
+                "name": "MiniMax M2.1",
+                "provider": "minimax",
+                "is_free": false,
+                "context_window": 204800,
+                "max_tokens": 131072
+            }
+        ]
+    },
+    {
+        "id": "custom",
+        "name": "自定义中转站",
+        "category": "custom",
+        "base_url": "",
+        "register_url": "",
+        "description": "填入自有 API 地址和密钥，支持任何 OpenAI 兼容接口",
+        "api_type": "openai-completions",
+        "models": []
+    }
+]
