@@ -95,10 +95,14 @@
 - [x] Stage 5: 后端 Rust 模块拆分 ✅ `v2-stage5-complete`
 - [x] Stage 6: Provider 数据外置 ✅ `v2-stage6-complete`
 
-## 🔧 Phase 4.5: 架构打磨（消除协作瓶颈）
-- [ ] Stage 7: CSS 模块化拆分（1,403行 → 11 文件）🚧
-- [ ] Stage 8: Tab 页面组件拆分（App.tsx 568→~150行）
-- [ ] Stage 9: config.rs 职责拆分（426→~250行）
+## 🔧 Phase 4.5: 架构打磨（消除协作瓶颈）✅
+- [x] Stage 7: CSS 模块化拆分 ✅ `v2-stage7-complete`
+- [x] Stage 8: Tab 页面组件拆分 ✅ `v2-stage8-complete`
+- [x] Stage 9: config.rs 职责拆分 ✅ `v2-stage9-complete`
+
+## 🔧 Phase 4.6: 最终打磨（App.tsx → ~150 行）
+- [ ] Stage 10: 弹窗组件提取（ModelSwitchModal/ConfirmModal/RepairToast）🚧
+- [ ] Stage 11: useService Hook 拆分（253→~130+130行）
 
 ## 🏢 Phase 5: 企业级分发
 - [ ] Sentry 错误上报 (opt-in)
