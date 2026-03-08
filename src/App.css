@@ -648,6 +648,8 @@ body {
 .settings-page {
   display: flex;
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
   gap: 24px;
 }
 
@@ -706,7 +708,9 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 0;
   overflow-y: auto;
+  padding-right: 8px;
 }
 
 .settings-section-title {
