@@ -60,7 +60,7 @@
   background: conic-gradient(from var(--border-angle),
       transparent 60%,
       transparent 75%,
-      var(--accent-blue) 85%,
+      var(--accent-purple) 85%,
       var(--accent-purple) 95%,
       var(--accent-cyan) 100%);
   animation: conic-spin 3s linear infinite;
@@ -102,7 +102,7 @@
 
 .startup-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple), var(--accent-cyan));
+  background: linear-gradient(90deg, var(--accent-purple), var(--accent-purple), var(--accent-cyan));
   background-size: 200% auto;
   animation: shine 2s linear infinite;
   border-radius: 2px;
@@ -124,7 +124,7 @@
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+  background: linear-gradient(90deg, var(--accent-purple), var(--accent-purple));
   border-radius: 3px;
   transition: width 0.5s;
 }

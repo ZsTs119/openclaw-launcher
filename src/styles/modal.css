@@ -22,12 +22,12 @@
 }
 
 .model-switch-item:hover {
-  border-color: var(--accent-blue);
+  border-color: var(--accent-active-border);
   background: rgba(79, 109, 245, 0.06);
 }
 
 .model-switch-item.active {
-  border-color: var(--accent-green);
+  border-color: var(--accent-active-border);
   background: rgba(34, 197, 94, 0.08);
 }
 
@@ -36,7 +36,7 @@
   padding: 2px 8px;
   border-radius: 10px;
   background: rgba(34, 197, 94, 0.15);
-  color: var(--accent-green);
+  color: var(--accent-success);
   font-weight: 600;
 }
 

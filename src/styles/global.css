@@ -10,8 +10,12 @@
   --text-secondary: rgba(255, 255, 255, 0.6);
   --text-muted: rgba(255, 255, 255, 0.4);
 
-  --accent-blue: #3b82f6;
-  --accent-green: #22c55e;
+  --accent-active: rgba(255, 255, 255, 0.15);
+  /* 激活态背景 */
+  --accent-active-border: rgba(255, 255, 255, 0.3);
+  /* 激活态边框 */
+  --accent-success: rgba(255, 255, 255, 0.85);
+  /* 成功/已配置文字 */
   --accent-red: #ef4444;
   --accent-yellow: #eab308;
   --accent-purple: #8b5cf6;
@@ -73,4 +77,3 @@ body {
   height: 100vh;
   user-select: none;
 }
-

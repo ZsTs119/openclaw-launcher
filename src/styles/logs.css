@@ -74,7 +74,7 @@
 }
 
 .log-msg.success {
-  color: var(--accent-green);
+  color: var(--accent-success);
 }
 
 .log-msg.warn {

@@ -33,7 +33,7 @@ export function DashboardTab({
         >
             <div className="dashboard-hero">
                 <div className={`status-ring ${running ? 'running' : 'stopped'}`}>
-                    {running ? <Activity size={42} strokeWidth={1.5} color="var(--accent-green)" /> : <Box size={42} strokeWidth={1.5} color="var(--text-muted)" />}
+                    {running ? <Activity size={42} strokeWidth={1.5} color="var(--text-primary)" /> : <Box size={42} strokeWidth={1.5} color="var(--text-muted)" />}
                 </div>
                 <h2 className="hero-status-text">
                     {running ? "OpenClaw 核心运行中" : "引擎已就绪"}

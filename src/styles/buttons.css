@@ -76,7 +76,7 @@
 .btn-link {
   background: none;
   border: none;
-  color: var(--accent-blue);
+  color: var(--text-primary);
   cursor: pointer;
   font-size: 13px;
   -webkit-app-region: no-drag;
@@ -87,6 +87,6 @@
 }
 
 .btn-link:hover {
-  text-decoration-color: var(--accent-blue);
+  text-decoration-color: var(--text-primary);
 }
 

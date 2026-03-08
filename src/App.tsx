@@ -220,7 +220,7 @@ function App() {
         confirmLabel="确认重置"
       >
         <p style={{ marginBottom: 12 }}>仅重置 API Key 和模型配置（openclaw.json 中的 models/agents 部分）。</p>
-        <p style={{ color: "var(--accent-green)", marginBottom: 4 }}>✅ 不会删除：</p>
+        <p style={{ color: "var(--text-secondary)", marginBottom: 4 }}>✅ 不会删除：</p>
         <ul style={{ paddingLeft: 20, marginBottom: 12, color: "var(--text-secondary)" }}>
           <li>对话历史和记忆</li>
           <li>Agent 技能和书签</li>
@@ -242,7 +242,7 @@ function App() {
         confirmLabel="确认重新安装"
       >
         <p style={{ marginBottom: 12 }}>这将删除 node_modules 并重新下载所有依赖，可能需要几分钟。</p>
-        <p style={{ color: "var(--accent-green)", marginBottom: 4 }}>适用于：</p>
+        <p style={{ color: "var(--text-secondary)", marginBottom: 4 }}>适用于：</p>
         <ul style={{ paddingLeft: 20, marginBottom: 12, color: "var(--text-secondary)" }}>
           <li>安装过程出错</li>
           <li>环境损坏或依赖缺失</li>

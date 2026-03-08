@@ -44,8 +44,8 @@
 }
 
 .status-dot.running {
-  background: var(--accent-green);
-  box-shadow: 0 0 8px var(--accent-green);
+  background: var(--text-primary);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
 }
 
 .status-dot.idle {

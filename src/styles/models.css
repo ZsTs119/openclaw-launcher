@@ -36,14 +36,14 @@
 }
 
 .category-btn:hover {
-  border-color: var(--accent-blue);
+  border-color: var(--accent-active-border);
   color: var(--text-primary);
 }
 
 .category-btn.active {
-  border-color: var(--accent-blue);
+  border-color: var(--accent-active-border);
   background: rgba(79, 109, 245, 0.12);
-  color: var(--accent-blue);
+  color: var(--text-primary);
   font-weight: 600;
 }
 
@@ -64,18 +64,18 @@
 }
 
 .provider-card:hover {
-  border-color: var(--accent-blue);
+  border-color: var(--accent-active-border);
   background: var(--bg-card-hover);
 }
 
 .provider-card.selected {
-  border-color: var(--accent-blue);
+  border-color: var(--accent-active-border);
   background: rgba(79, 109, 245, 0.08);
-  box-shadow: 0 0 0 1px var(--accent-blue);
+  box-shadow: 0 0 0 1px var(--accent-active-border);
 }
 
 .provider-card.active-provider {
-  border-color: var(--accent-green);
+  border-color: var(--accent-active-border);
   background: rgba(34, 197, 94, 0.05);
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3);
 }
@@ -109,7 +109,7 @@
   font-size: 11px;
   padding: 2px 8px;
   background: rgba(79, 109, 245, 0.1);
-  color: var(--accent-blue);
+  color: var(--text-primary);
   border-radius: 12px;
 }
 
@@ -117,7 +117,7 @@
   font-size: 11px;
   padding: 2px 8px;
   background: rgba(34, 197, 94, 0.15);
-  color: var(--accent-green);
+  color: var(--accent-success);
   border-radius: 12px;
   font-weight: 600;
 }
@@ -126,7 +126,7 @@
   font-size: 10px;
   padding: 1px 6px;
   background: rgba(34, 197, 94, 0.15);
-  color: var(--accent-green);
+  color: var(--accent-success);
   border-radius: 8px;
   margin-left: 6px;
 }
@@ -175,7 +175,7 @@
 }
 
 .input-field:focus {
-  border-color: var(--accent-blue);
+  border-color: var(--accent-active-border);
 }
 
 .input-field::placeholder {
@@ -202,13 +202,13 @@
 }
 
 .model-select-btn:hover {
-  border-color: var(--accent-blue);
+  border-color: var(--accent-active-border);
 }
 
 .model-select-btn.active {
-  border-color: var(--accent-green);
+  border-color: var(--accent-active-border);
   background: rgba(34, 197, 94, 0.12);
-  color: var(--accent-green);
+  color: var(--accent-success);
   font-weight: 600;
 }
 
