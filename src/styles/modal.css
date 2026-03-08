@@ -1,0 +1,104 @@
+/* ===== Model Switch Modal ===== */
+.model-switch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.model-switch-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+  text-align: left;
+  width: 100%;
+}
+
+.model-switch-item:hover {
+  border-color: var(--accent-blue);
+  background: rgba(79, 109, 245, 0.06);
+}
+
+.model-switch-item.active {
+  border-color: var(--accent-green);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.model-switch-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--accent-green);
+  font-weight: 600;
+}
+
+/* ===== Modal ===== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 24px;
+  max-width: 540px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.modal-desc {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-providers {
+  max-height: 200px;
+  overflow-y: auto;
+  grid-template-columns: 1fr !important;
+}
+
+.modal-save {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.form-group-row {
+  display: flex;
+  justify-content: flex-end;
+}

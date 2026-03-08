@@ -1,0 +1,222 @@
+/* ===== Models Page ===== */
+.models-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 0;
+}
+
+.page-desc {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-top: -8px;
+}
+
+/* Category tabs */
+.category-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.category-btn {
+  padding: 8px 18px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+  -webkit-app-region: no-drag;
+}
+
+.category-btn:hover {
+  border-color: var(--accent-blue);
+  color: var(--text-primary);
+}
+
+.category-btn.active {
+  border-color: var(--accent-blue);
+  background: rgba(79, 109, 245, 0.12);
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+/* Provider list */
+.provider-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.provider-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.provider-card:hover {
+  border-color: var(--accent-blue);
+  background: var(--bg-card-hover);
+}
+
+.provider-card.selected {
+  border-color: var(--accent-blue);
+  background: rgba(79, 109, 245, 0.08);
+  box-shadow: 0 0 0 1px var(--accent-blue);
+}
+
+.provider-card.active-provider {
+  border-color: var(--accent-green);
+  background: rgba(34, 197, 94, 0.05);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3);
+}
+
+.provider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.provider-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.provider-desc {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.provider-models {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.model-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(79, 109, 245, 0.1);
+  color: var(--accent-blue);
+  border-radius: 12px;
+}
+
+.badge-free {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--accent-green);
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.badge-free-sm {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--accent-green);
+  border-radius: 8px;
+  margin-left: 6px;
+}
+
+/* Config panel */
+.config-panel,
+.custom-config {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.config-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-group label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.input-field {
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.input-field:focus {
+  border-color: var(--accent-blue);
+}
+
+.input-field::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.model-select-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.model-select-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+  -webkit-app-region: no-drag;
+}
+
+.model-select-btn:hover {
+  border-color: var(--accent-blue);
+}
+
+.model-select-btn.active {
+  border-color: var(--accent-green);
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--accent-green);
+  font-weight: 600;
+}
+
+.config-status {
+  font-size: 13px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+

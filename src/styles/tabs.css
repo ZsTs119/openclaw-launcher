@@ -1,0 +1,75 @@
+/* ===== Tab Navigation (Premium Navbar) ===== */
+.tab-nav {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 24px 16px;
+  background: transparent;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Optional: Slight radial glow behind the navbar */
+.tab-nav::before {
+  content: '';
+  position: absolute;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 400px;
+  height: 100px;
+  background: radial-gradient(ellipse at top, rgba(139, 92, 246, 0.15), transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-app-region: no-drag;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+
+.tab-btn.active {
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border-color: var(--border-subtle);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  opacity: 0.8;
+}
+
+/* Content Container constraints */
+.tab-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 32px 24px;
+  min-height: 0;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  /* Centered content */
+}
+
