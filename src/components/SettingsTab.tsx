@@ -163,7 +163,7 @@ export function SettingsTab({
                                 <div className="about-logo">OpenClaw</div>
                                 <div className="about-title">新一代 AI 本地驱动核心</div>
                                 <div className="about-version-card">
-                                    <span>当前版本 v0.3.1</span>
+                                    <span>当前版本 v0.4.0</span>
                                     <button className={`btn-ghost ${checkingUpdate ? 'spin' : ''}`} title="检查更新" onClick={onCheckUpdate} disabled={checkingUpdate}>
                                         <RefreshCw size={14} strokeWidth={2} />
                                     </button>

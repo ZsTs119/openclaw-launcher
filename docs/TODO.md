@@ -124,15 +124,15 @@
 ## 🚀 Phase 5.5: 仪表盘体验优化 + 端口扩展 ✅
 - [x] Stage 19: 全局启动加载框 + Logo 替换 + 脉冲光效 + 端口范围扩展 ✅ `v2-stage19-complete`
 
-## ⚙️ Phase 5.6: 自定义模型 ID 输入
-- [ ] Stage 20: ApiKeyModal + ModelSwitchModal 支持手动输入模型 ID 🚧
+## ⚙️ Phase 5.6: 自定义模型 ID 输入 ✅
+- [x] Stage 20: ApiKeyModal + ModelSwitchModal 支持手动输入模型 ID ✅ `v2-stage20-complete`
 
 ---
 
 ## ⚠️ 发版规范 Checklist（正式发布前必读）
 
 > **版本号规范**：Semantic Versioning (`MAJOR.MINOR.PATCH`)
-> - 当前：`0.3.1` → 下个功能版本 `0.4.0`，修 bug `0.3.2`，正式版 `1.0.0`
+> - 当前：`0.4.0` → 下个功能版本 `0.5.0`，修 bug `0.4.1`，正式版 `1.0.0`
 
 | 步骤 | 说明 |
 |---|---|

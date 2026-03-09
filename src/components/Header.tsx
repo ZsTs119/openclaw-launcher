@@ -16,7 +16,7 @@ export function Header({ running, phase, statusClass }: HeaderProps) {
         <header className="header">
             <div className="header-left">
                 <span className="header-logo">OpenClaw Launcher</span>
-                <span className="header-version">v0.3.1</span>
+                <span className="header-version">v0.4.0</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {phase === "ready" && (
