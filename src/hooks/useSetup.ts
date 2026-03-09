@@ -24,9 +24,11 @@ export function useSetup({ addLog, checkApiKey, setRunning }: UseSetupOptions) {
     const [progress, setProgress] = useState(0);
     const [progressMsg, setProgressMsg] = useState("正在检查环境...");
     const [workspacePath, setWorkspacePath] = useState("");
+    const [setupError, setSetupError] = useState<string | null>(null);
 
     const runSetup = useCallback(async () => {
         setLoading(true);
+        setSetupError(null);
         try {
             await invoke("setup_openclaw");
             setPhase("ready");
@@ -34,7 +36,7 @@ export function useSetup({ addLog, checkApiKey, setRunning }: UseSetupOptions) {
             await checkApiKey();
         } catch (err) {
             addLog("error", `初始化失败: ${err}`);
-            setProgressMsg(`[!] 初始化失败: ${err}`);
+            setSetupError(String(err));
         } finally {
             setLoading(false);
         }
@@ -131,12 +133,22 @@ export function useSetup({ addLog, checkApiKey, setRunning }: UseSetupOptions) {
         }
     }, [addLog]);
 
+    const clearSetupError = useCallback(() => setSetupError(null), []);
+
+    const retrySetup = useCallback(() => {
+        setSetupError(null);
+        setProgress(0);
+        setProgressMsg("正在重试初始化...");
+        runSetup();
+    }, [runSetup]);
+
     return {
         phase, setPhase,
         loading, setLoading,
         progress, setProgress,
         progressMsg, setProgressMsg,
         workspacePath,
+        setupError, clearSetupError, retrySetup,
         handleSelectFolder,
         handleConfirmWorkspace,
         handleSwitchWorkspace,

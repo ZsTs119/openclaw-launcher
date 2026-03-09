@@ -63,6 +63,7 @@ function App() {
     progress, setProgress,
     progressMsg, setProgressMsg,
     workspacePath,
+    setupError, clearSetupError, retrySetup,
     handleSelectFolder, handleConfirmWorkspace, handleSwitchWorkspace,
   } = useSetup({ addLog, checkApiKey, setRunning });
 
@@ -103,6 +104,10 @@ function App() {
         progressMsg={progressMsg}
         workspacePath={workspacePath}
         loading={loading}
+        appVersion={APP_VERSION}
+        setupError={setupError}
+        onDismissError={clearSetupError}
+        onRetry={retrySetup}
         onSelectFolder={handleSelectFolder}
         onConfirmWorkspace={handleConfirmWorkspace}
       />

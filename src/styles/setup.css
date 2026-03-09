@@ -1,10 +1,178 @@
-/* ===== Init Screen (Premium Conic Gradient Style) ===== */
-@property --border-angle {
-  syntax: "<angle>";
-  inherits: true;
-  initial-value: 0turn;
+/* ===== Setup Screen — Aurora Floating Style ===== */
+
+/* --- Aurora Background Container --- */
+.startup-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: var(--bg-primary);
+  overflow: hidden;
 }
 
+/* Aurora layer 1: purple wisp */
+.startup-container::before {
+  content: "";
+  position: absolute;
+  top: -10%;
+  left: 10%;
+  width: 500px;
+  height: 300px;
+  background: radial-gradient(ellipse, rgba(139, 92, 246, 0.12), transparent 70%);
+  filter: blur(60px);
+  animation: aurora-drift-1 8s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+/* Aurora layer 2: cyan wisp */
+.startup-container::after {
+  content: "";
+  position: absolute;
+  top: -8%;
+  right: 5%;
+  width: 450px;
+  height: 280px;
+  background: radial-gradient(ellipse, rgba(6, 182, 212, 0.10), transparent 70%);
+  filter: blur(50px);
+  animation: aurora-drift-2 10s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes aurora-drift-1 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: translate(60px, 20px) scale(1.15);
+    opacity: 1;
+  }
+}
+
+@keyframes aurora-drift-2 {
+  0% {
+    transform: translate(0, 0) scale(1.1);
+    opacity: 0.7;
+  }
+
+  100% {
+    transform: translate(-50px, 15px) scale(1);
+    opacity: 1;
+  }
+}
+
+/* --- Floating Content (no card/box) --- */
+.startup-box {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 40px;
+  text-align: center;
+  min-width: 320px;
+  /* No background, no border, no shadow — pure floating */
+}
+
+/* --- Title: White → Gray gradient (matches .about-logo) --- */
+.startup-logo {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  background: linear-gradient(135deg, #ffffff, #6b7280);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 40px rgba(255, 255, 255, 0.08);
+}
+
+/* --- Version subtitle --- */
+.startup-version {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.5px;
+  margin-top: -8px;
+}
+
+/* --- Progress Bar with White Glow --- */
+.startup-progress-bar {
+  width: 320px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: visible;
+  position: relative;
+  margin-top: 8px;
+}
+
+.startup-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.5));
+  border-radius: 2px;
+  position: relative;
+  box-shadow:
+    0 0 8px rgba(255, 255, 255, 0.3),
+    0 0 20px rgba(255, 255, 255, 0.15);
+}
+
+/* Shimmer sweep on the progress fill */
+.startup-progress-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.4) 50%,
+      transparent 100%);
+  background-size: 200% 100%;
+  animation: progress-shimmer 2s linear infinite;
+  border-radius: inherit;
+}
+
+@keyframes progress-shimmer {
+  0% {
+    background-position: -200% center;
+  }
+
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* --- Progress percentage text --- */
+.startup-percent {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 2px;
+}
+
+/* --- Status text --- */
+.startup-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* --- Workspace Path Badge --- */
+.workspace-path {
+  font-size: 12px;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+/* --- Legacy .init-screen (kept for compat) --- */
 .init-screen {
   flex: 1;
   display: flex;
@@ -26,94 +194,7 @@
   text-align: center;
 }
 
-/* Premium Startup Box */
-.startup-container {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-primary);
-  /* Optional subtle mesh gradient background */
-  background-image: radial-gradient(circle at 50% 10%, rgba(59, 130, 246, 0.05), transparent 40%),
-    radial-gradient(circle at 20% 80%, rgba(139, 92, 246, 0.05), transparent 30%);
-}
-
-.startup-box {
-  position: relative;
-  background: var(--bg-card);
-  border-radius: 16px;
-  padding: 32px 40px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-width: 320px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-
-.startup-box::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  z-index: -1;
-  background: conic-gradient(from var(--border-angle),
-      transparent 60%,
-      transparent 75%,
-      var(--accent-purple) 85%,
-      var(--accent-purple) 95%,
-      var(--accent-cyan) 100%);
-  animation: conic-spin 3s linear infinite;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  padding: 1px;
-}
-
-@keyframes conic-spin {
-  t {
-    --border-angle: 1turn;
-  }
-}
-
-.startup-logo {
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  background: linear-gradient(135deg, #ffffff, rgba(255, 255, 255, 0.4));
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.startup-text {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.startup-progress-bar {
-  width: 100%;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.startup-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent-purple), var(--accent-purple), var(--accent-cyan));
-  background-size: 200% auto;
-  animation: shine 2s linear infinite;
-  border-radius: 2px;
-}
-
-@keyframes shine {
-  to {
-    background-position: 200% center;
-  }
-}
-
+/* Legacy progress bar classes (may be used elsewhere) */
 .progress-bar-container {
   width: 320px;
   height: 6px;
@@ -124,17 +205,7 @@
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-purple), var(--accent-purple));
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.4));
   border-radius: 3px;
   transition: width 0.5s;
 }
-
-.workspace-path {
-  font-size: 12px;
-  padding: 8px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-}
-
