@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Modal, ModalFooter } from "./ui/Modal";
 import type { ProviderInfo, CurrentConfig } from "../types";
+import { ModelSelectWithCustom } from "./ModelSelectWithCustom";
 
 interface ModelSwitchModalProps {
     show: boolean;
@@ -12,25 +14,46 @@ interface ModelSwitchModalProps {
 export function ModelSwitchModal({
     show, onClose, providers, currentConfig, handleSetModel,
 }: ModelSwitchModalProps) {
+    const [customModelId, setCustomModelId] = useState("");
+
+    const currentProvider = providers.find(p => p.id === currentConfig?.provider);
+    const models = currentProvider?.models || [];
+
     return (
         <Modal show={show} onClose={onClose} title="切换模型" maxWidth={400}>
             <div className="modal-desc">选择要使用的 AI 模型</div>
             {currentConfig?.provider ? (
                 <div className="model-switch-list" style={{ marginTop: 12 }}>
-                    {providers.find(p => p.id === currentConfig.provider)?.models.map((m) => (
-                        <button
-                            key={m.id}
-                            className={`model-switch-item ${currentConfig.model?.endsWith(m.id) ? "active" : ""}`}
-                            onClick={async () => {
-                                const fullModelId = `${currentConfig.provider}/${m.id}`;
-                                await handleSetModel(fullModelId);
-                                onClose();
-                            }}
-                        >
-                            <span className="model-switch-name">{m.name}</span>
-                            {currentConfig.model?.endsWith(m.id) && <span className="model-switch-badge">当前</span>}
-                        </button>
-                    )) || <div style={{ color: "var(--text-secondary)" }}>暂无可用模型</div>}
+                    <ModelSelectWithCustom
+                        models={models}
+                        selectedModel={
+                            // Extract model id from full "provider/model" format
+                            currentConfig.model?.includes("/")
+                                ? currentConfig.model.split("/").slice(1).join("/")
+                                : currentConfig.model || ""
+                        }
+                        onSelect={(modelId) => {
+                            setCustomModelId(modelId);
+                        }}
+                    />
+                    <button
+                        className="btn-primary"
+                        style={{ width: '100%', marginTop: 12, padding: '10px' }}
+                        onClick={async () => {
+                            const modelToSet = customModelId || (
+                                currentConfig.model?.includes("/")
+                                    ? currentConfig.model.split("/").slice(1).join("/")
+                                    : currentConfig.model || ""
+                            );
+                            if (!modelToSet.trim()) return;
+                            const fullModelId = `${currentConfig.provider}/${modelToSet.trim()}`;
+                            await handleSetModel(fullModelId);
+                            onClose();
+                        }}
+                        disabled={!customModelId}
+                    >
+                        确认切换
+                    </button>
                 </div>
             ) : (
                 <div style={{ color: "var(--text-secondary)", marginTop: 12 }}>

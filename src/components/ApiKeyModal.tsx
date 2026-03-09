@@ -11,6 +11,7 @@ import { Key, Gift, CreditCard, Globe, ExternalLink } from "lucide-react";
 import React from "react";
 import type { ProviderInfo, CurrentConfig } from "../types";
 import { CATEGORY_LABELS } from "../types";
+import { ModelSelectWithCustom } from "./ModelSelectWithCustom";
 
 interface ApiKeyModalProps {
     show: boolean;
@@ -178,18 +179,11 @@ export function ApiKeyModal({
                                             </div>
                                             <div className="form-group">
                                                 <label>选择验证模型</label>
-                                                <div className="model-select-list">
-                                                    {providers.find(p => p.id === selectedProvider)?.models.map((m) => (
-                                                        <button key={m.id}
-                                                            className={`model-select-btn ${selectedModel === m.id ? "active" : ""}`}
-                                                            data-text={m.name}
-                                                            onClick={() => setSelectedModel(m.id)}
-                                                        >
-                                                            {m.name}
-                                                            {m.is_free && <span className="badge-free-sm">免费</span>}
-                                                        </button>
-                                                    ))}
-                                                </div>
+                                                <ModelSelectWithCustom
+                                                    models={providers.find(p => p.id === selectedProvider)?.models || []}
+                                                    selectedModel={selectedModel}
+                                                    onSelect={setSelectedModel}
+                                                />
                                             </div>
                                         </div>
                                     )}
