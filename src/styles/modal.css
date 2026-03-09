@@ -23,19 +23,19 @@
 
 .model-switch-item:hover {
   border-color: var(--accent-active-border);
-  background: rgba(79, 109, 245, 0.06);
+  background: var(--accent-active);
 }
 
 .model-switch-item.active {
   border-color: var(--accent-active-border);
-  background: rgba(34, 197, 94, 0.08);
+  background: var(--accent-active);
 }
 
 .model-switch-badge {
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 10px;
-  background: rgba(34, 197, 94, 0.15);
+  background: var(--accent-active);
   color: var(--accent-success);
   font-weight: 600;
 }

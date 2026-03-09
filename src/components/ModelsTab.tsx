@@ -1,5 +1,6 @@
+import React from "react";
 import { motion } from "framer-motion";
-import { Cpu, Save } from "lucide-react";
+import { Cpu, Save, Gift, CreditCard, Globe } from "lucide-react";
 import { CATEGORY_LABELS } from "../types";
 import type { ProviderInfo, CurrentConfig } from "../types";
 
@@ -47,17 +48,25 @@ export function ModelsTab({
             <p className="page-desc">选择 AI 模型提供商，配置 API Key 后即可开始使用。</p>
 
             <div className="category-tabs" style={{ marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)' }}>
-                {Object.entries(CATEGORY_LABELS).map(([key, { label, icon }]) => (
-                    <button key={key}
-                        className={`category-btn ${selectedCategory === key ? "active" : ""}`}
-                        onClick={() => { setSelectedCategory(key); setSelectedProvider(""); setConfigStatus(""); }}>
-                        {icon} {label}
-                    </button>
-                ))}
+                {Object.entries(CATEGORY_LABELS).map(([key, { label, icon }]) => {
+                    const IconMap: Record<string, React.ReactNode> = {
+                        gift: <Gift size={14} strokeWidth={1.5} />,
+                        "credit-card": <CreditCard size={14} strokeWidth={1.5} />,
+                        globe: <Globe size={14} strokeWidth={1.5} />,
+                    };
+                    return (
+                        <button key={key}
+                            className={`category-btn ${selectedCategory === key ? "active" : ""}`}
+                            data-text={label}
+                            onClick={() => { setSelectedCategory(key); setSelectedProvider(""); setConfigStatus(""); }}>
+                            {IconMap[icon]} {label}
+                        </button>
+                    );
+                })}
             </div>
 
             {selectedCategory === "custom" ? (
-                <div className="custom-config animate-fade-in" style={{ maxWidth: 500, margin: '0 auto' }}>
+                <div className="custom-config animate-fade-in" style={{ maxWidth: 640, margin: '0 auto' }}>
                     <div className="form-group">
                         <label>API Base URL</label>
                         <input type="url" placeholder="https://your-relay.com/v1" value={baseUrlInput}

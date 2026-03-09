@@ -30,8 +30,8 @@
 }
 
 .status-ring.running {
-  background: rgba(34, 197, 94, 0.05);
-  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.2), 0 0 40px rgba(34, 197, 94, 0.1);
+  background: var(--accent-active);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15), 0 0 40px rgba(255, 255, 255, 0.06);
   animation: pulse-ring 3s infinite ease-in-out;
 }
 
@@ -42,15 +42,15 @@
 
 @keyframes pulse-ring {
   0% {
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.2), 0 0 40px rgba(34, 197, 94, 0.1);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15), 0 0 40px rgba(255, 255, 255, 0.06);
   }
 
   50% {
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.4), 0 0 60px rgba(34, 197, 94, 0.2);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25), 0 0 60px rgba(255, 255, 255, 0.15);
   }
 
   100% {
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.2), 0 0 40px rgba(34, 197, 94, 0.1);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15), 0 0 40px rgba(255, 255, 255, 0.06);
   }
 }
 

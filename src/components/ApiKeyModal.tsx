@@ -7,7 +7,8 @@
  */
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Key } from "lucide-react";
+import { Key, Gift, CreditCard, Globe, ExternalLink } from "lucide-react";
+import React from "react";
 import type { ProviderInfo, CurrentConfig } from "../types";
 import { CATEGORY_LABELS } from "../types";
 
@@ -80,6 +81,7 @@ export function ApiKeyModal({
                     <motion.div
                         className="modal-box"
                         onClick={(e) => e.stopPropagation()}
+                        style={{ minHeight: 420 }}
                         initial={{ scale: 0.95, opacity: 0, y: 10 }}
                         animate={{ scale: 1, opacity: 1, y: 0 }}
                         exit={{ scale: 0.95, opacity: 0, y: 10 }}
@@ -97,15 +99,23 @@ export function ApiKeyModal({
                         {/* Category tabs (Hide if direct config) */}
                         {!isDirectConfig && (
                             <div className="category-tabs" style={{ marginBottom: 16 }}>
-                                {Object.entries(CATEGORY_LABELS).map(([key, { label, icon }]) => (
-                                    <button
-                                        key={key}
-                                        className={`category-btn ${selectedCategory === key ? "active" : ""}`}
-                                        onClick={() => { setSelectedCategory(key); setSelectedProvider(""); setConfigStatus(""); }}
-                                    >
-                                        {icon} {label}
-                                    </button>
-                                ))}
+                                {Object.entries(CATEGORY_LABELS).map(([key, { label, icon }]) => {
+                                    const IconMap: Record<string, React.ReactNode> = {
+                                        gift: <Gift size={14} strokeWidth={1.5} />,
+                                        "credit-card": <CreditCard size={14} strokeWidth={1.5} />,
+                                        globe: <Globe size={14} strokeWidth={1.5} />,
+                                    };
+                                    return (
+                                        <button
+                                            key={key}
+                                            className={`category-btn ${selectedCategory === key ? "active" : ""}`}
+                                            data-text={label}
+                                            onClick={() => { setSelectedCategory(key); setSelectedProvider(""); setConfigStatus(""); }}
+                                        >
+                                            {IconMap[icon]} {label}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         )}
 
@@ -158,7 +168,7 @@ export function ApiKeyModal({
                                     <div className="modal-form animate-fade-in" style={{ marginTop: isDirectConfig ? 0 : 16 }}>
                                         <div className="form-group-row" style={{ marginBottom: 12 }}>
                                             <button className="btn-link" onClick={() => onOpenRegister(selectedProvider)}>
-                                                🔗 {selectedCategory === "free" ? "点击此处注册获取免费 API Key →" : "前往官网获取 API Key →"}
+                                                <ExternalLink size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> {selectedCategory === "free" ? "点击此处注册获取免费 API Key →" : "前往官网获取 API Key →"}
                                             </button>
                                         </div>
                                         <div className="form-group">
@@ -172,6 +182,7 @@ export function ApiKeyModal({
                                                 {providers.find(p => p.id === selectedProvider)?.models.map((m) => (
                                                     <button key={m.id}
                                                         className={`model-select-btn ${selectedModel === m.id ? "active" : ""}`}
+                                                        data-text={m.name}
                                                         onClick={() => setSelectedModel(m.id)}
                                                     >
                                                         {m.name}

@@ -43,7 +43,7 @@ export interface CurrentConfig {
 
 // ===== UI Constants =====
 export const CATEGORY_LABELS: Record<string, { label: string; icon: string }> = {
-    free: { label: "免费注册", icon: "🆓" },
-    provider: { label: "Coding Plan", icon: "💳" },
-    custom: { label: "自定义中转站", icon: "🔧" },
+    free: { label: "免费注册", icon: "gift" },
+    provider: { label: "Coding Plan", icon: "credit-card" },
+    custom: { label: "自定义中转站", icon: "globe" },
 };
