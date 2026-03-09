@@ -237,12 +237,21 @@ openclaw-launcher/
 
 ---
 
-## ☕ 请作者喝杯咖啡
+## ☕ 支持与联系
 
-如果 OpenClaw Launcher 帮到了你，可以请作者喝杯咖啡 ☕
+如果 OpenClaw Launcher 帮到了你，欢迎请作者喝杯咖啡 ☕ 或关注公众号获取最新动态 📱
 
 <div align="center">
-<img src="docs/donate.jpg" alt="赞赏码" width="300" />
+<table>
+<tr>
+<td align="center"><strong>☕ 赞赏支持</strong></td>
+<td align="center"><strong>📱 关注公众号</strong></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/donate.jpg" alt="赞赏码" width="250" /></td>
+<td align="center"><img src="docs/wechat-official.jpg" alt="公众号" width="250" /></td>
+</tr>
+</table>
 </div>
 
 ---
