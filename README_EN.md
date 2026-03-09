@@ -6,7 +6,7 @@
 
 [![GitHub Release](https://img.shields.io/github/v/release/ZsTs119/openclaw-launcher?style=flat-square&color=blue)](https://github.com/ZsTs119/openclaw-launcher/releases)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/ZsTs119/openclaw-launcher/build.yml?style=flat-square)](https://github.com/ZsTs119/openclaw-launcher/actions)
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)]()
 
 [Download](https://github.com/ZsTs119/openclaw-launcher/releases) · [Features](#-features) · [Quick Start](#-quick-start) · [Development](#-development) · [Contributing](#-contributing)
@@ -260,7 +260,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## 📄 License
 
-[MIT License](LICENSE) — free to use, modify, and distribute.
+This project is licensed under [GPL-3.0](LICENSE).
+
+- ✅ **Personal use, study, non-commercial** — Completely free
+- ✅ **Derivative works** — Allowed, but must also be open-sourced under GPL-3.0
+- ❌ **Commercial distribution / reselling** — Not allowed without authorization
+- 📧 **Commercial license** — Contact the author via [GitHub Issues](https://github.com/ZsTs119/openclaw-launcher/issues)
 
 ---
 

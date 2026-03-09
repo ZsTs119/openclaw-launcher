@@ -1,3 +1,6 @@
+// Copyright (C) 2026 ZsTs119
+// SPDX-License-Identifier: GPL-3.0-only
+// This file is part of OpenClaw Launcher. See LICENSE for details.
 import { invoke } from "@tauri-apps/api/core";
 import { Settings as SettingsIcon, Box, Hexagon, Github, RefreshCw, SlidersHorizontal, FolderOpen, Key, Wrench, Trash2, FileText, Download, MessageCircle, Heart, Check, X } from "lucide-react";
 import { motion } from "framer-motion";

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 ZsTs119
+// SPDX-License-Identifier: GPL-3.0-only
+// This file is part of OpenClaw Launcher. See LICENSE for details.
 /// Provider data management.
 ///
 /// Loads the provider catalog from providers.json

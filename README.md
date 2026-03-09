@@ -6,7 +6,7 @@
 
 [![GitHub Release](https://img.shields.io/github/v/release/ZsTs119/openclaw-launcher?style=flat-square&color=blue)](https://github.com/ZsTs119/openclaw-launcher/releases)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/ZsTs119/openclaw-launcher/build.yml?style=flat-square)](https://github.com/ZsTs119/openclaw-launcher/actions)
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)]()
 
 [下载安装包](https://github.com/ZsTs119/openclaw-launcher/releases) · [功能特性](#-功能特性) · [快速开始](#-快速开始) · [开发指南](#-开发指南) · [参与贡献](#-参与贡献)
@@ -262,7 +262,12 @@ openclaw-launcher/
 
 ## 📄 License
 
-[MIT License](LICENSE) — 自由使用、修改和分发。
+本项目采用 [GPL-3.0 开源协议](LICENSE)。
+
+- ✅ **个人学习、研究、非商业使用** — 完全免费
+- ✅ **二次开发** — 允许，但衍生作品也必须采用 GPL-3.0 开源
+- ❌ **商业分发 / 换皮售卖** — 未经授权禁止
+- 📧 **商业授权** — 如需商业使用，请联系作者：[GitHub Issues](https://github.com/ZsTs119/openclaw-launcher/issues)
 
 ---
 
