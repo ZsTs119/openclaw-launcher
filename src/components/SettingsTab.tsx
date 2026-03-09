@@ -22,6 +22,8 @@ interface SettingsTabProps {
     setShowKeyModal: (v: boolean) => void;
     setInfoModalTitle: (v: string) => void;
     onExportDiagnostics: () => void;
+    onCheckUpdate: () => void;
+    checkingUpdate: boolean;
 }
 
 export function SettingsTab({
@@ -32,6 +34,8 @@ export function SettingsTab({
     handleSwitchWorkspace, handleReinstall, handleRepairConnection, handleReset,
     setShowKeyModal, setInfoModalTitle,
     onExportDiagnostics,
+    onCheckUpdate,
+    checkingUpdate,
 }: SettingsTabProps) {
     return (
         <motion.div
@@ -160,7 +164,7 @@ export function SettingsTab({
                                 <div className="about-title">新一代 AI 本地驱动核心</div>
                                 <div className="about-version-card">
                                     <span>当前版本 v0.3.1</span>
-                                    <button className="btn-ghost" title="检查更新">
+                                    <button className={`btn-ghost ${checkingUpdate ? 'spin' : ''}`} title="检查更新" onClick={onCheckUpdate} disabled={checkingUpdate}>
                                         <RefreshCw size={14} strokeWidth={2} />
                                     </button>
                                 </div>

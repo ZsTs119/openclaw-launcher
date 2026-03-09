@@ -4,6 +4,8 @@ import { save, message } from "@tauri-apps/plugin-dialog";
 import { Activity, Cpu, SlidersHorizontal, Network } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import "./App.css";
+import qrWechat from "./assets/qr-wechat.jpg";
+import qrAlipay from "./assets/qr-alipay.jpg";
 
 // ===== Extracted modules =====
 import type { TabId } from "./types";
@@ -29,6 +31,8 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [activeSettingsTab, setActiveSettingsTab] = useState<"general" | "logs" | "about">("general");
   const [running, setRunning] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const APP_VERSION = "0.3.1";
 
   // === Hooks ===
   const {
@@ -202,6 +206,25 @@ function App() {
                   await message(`导出失败: ${e}`, { title: '导出错误', kind: 'error' });
                 }
               }}
+              checkingUpdate={checkingUpdate}
+              onCheckUpdate={async () => {
+                setCheckingUpdate(true);
+                try {
+                  const res = await fetch('https://api.github.com/repos/ZsTs119/openclaw-launcher/releases/latest');
+                  const data = await res.json();
+                  const latestTag = data.tag_name?.replace(/^v/, '') || '';
+                  if (latestTag && latestTag !== APP_VERSION) {
+                    await message(`发现新版本 v${latestTag}！\n当前版本 v${APP_VERSION}\n\n点击确定前往下载页面`, { title: '发现更新', kind: 'info' });
+                    await invoke('open_url', { url: data.html_url || 'https://github.com/ZsTs119/openclaw-launcher/releases' });
+                  } else {
+                    await message(`当前版本 v${APP_VERSION} 已是最新版本 ✅`, { title: '无可用更新' });
+                  }
+                } catch {
+                  await message('检查更新失败，请检查网络连接', { title: '网络错误', kind: 'error' });
+                } finally {
+                  setCheckingUpdate(false);
+                }
+              }}
             />
           )}
         </AnimatePresence>
@@ -209,9 +232,18 @@ function App() {
 
       {/* Generic Info / QR Code Modal */}
       <Modal show={!!infoModalTitle} onClose={() => setInfoModalTitle("")} title={infoModalTitle} maxWidth={360}>
-        <div className="modal-desc" style={{ marginTop: 16, marginBottom: 24, padding: 32, background: 'var(--bg-card)', borderRadius: 'var(--radius)', textAlign: 'center' }}>
-          <div style={{ color: 'var(--text-muted)' }}>[ 二维码图片占位符 ]</div>
-          <div style={{ fontSize: 12, marginTop: 12 }}>请在 assets 文件夹替换为你个人的二维码图片</div>
+        <div className="modal-desc" style={{ marginTop: 16, marginBottom: 24, padding: 24, background: 'var(--bg-card)', borderRadius: 'var(--radius)', textAlign: 'center' }}>
+          {infoModalTitle.includes('赞赏') ? (
+            <>
+              <img src={qrAlipay} alt="支付宝收钱码" style={{ width: '100%', maxWidth: 220, borderRadius: 8 }} />
+              <div style={{ fontSize: 13, marginTop: 12, color: 'var(--text-secondary)' }}>如果 OpenClaw 对你有帮助，可以请作者喝杯咖啡 ☕</div>
+            </>
+          ) : (
+            <>
+              <img src={qrWechat} alt="微信公众号" style={{ width: '100%', maxWidth: 220, borderRadius: 8 }} />
+              <div style={{ fontSize: 13, marginTop: 12, color: 'var(--text-secondary)' }}>扫码关注微信公众号，获取最新动态</div>
+            </>
+          )}
         </div>
         <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setInfoModalTitle("")}>关闭</button>
       </Modal>
