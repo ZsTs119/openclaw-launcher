@@ -2,7 +2,7 @@
 
 # 🚀 OpenClaw Launcher
 
-**One-click install, zero config — experience the power of AI coding instantly.**
+**One-click install, zero config — let anyone run AI coding assistant locally.**
 
 [![GitHub Release](https://img.shields.io/github/v/release/ZsTs119/openclaw-launcher?style=flat-square&color=blue)](https://github.com/ZsTs119/openclaw-launcher/releases)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/ZsTs119/openclaw-launcher/build.yml?style=flat-square)](https://github.com/ZsTs119/openclaw-launcher/actions)
@@ -15,7 +15,7 @@
 
 ---
 
-*OpenClaw Launcher lets anyone run the [OpenClaw](https://github.com/openclaw/openclaw) AI coding assistant locally — no programming experience required.*
+*OpenClaw Launcher lets anyone — even with zero programming experience — install and run the [OpenClaw](https://github.com/openclaw/openclaw) AI coding assistant on their own computer. No Node.js setup, no CLI, no config files.*
 
 </div>
 
@@ -38,6 +38,12 @@
 <tr>
 <td><img src="docs/screenshot-startup.png" alt="Startup" width="400" /></td>
 <td><img src="docs/screenshot-models.png" alt="Models" width="400" /></td>
+</tr>
+<tr>
+<td align="center" colspan="2"><strong>Settings — About</strong></td>
+</tr>
+<tr>
+<td align="center" colspan="2"><img src="docs/screenshot-about.png" alt="About" width="400" /></td>
 </tr>
 </table>
 </div>
@@ -135,22 +141,110 @@ npm run tauri build
 - [Rust](https://www.rust-lang.org/tools/install) ≥ 1.70
 - **Linux:** `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev`
 
-## 🏗️ Tech Stack
+## 🏗️ Architecture
 
-- **Frontend:** React + TypeScript
-- **Backend:** Rust (Tauri v2)
-- **Styling:** Vanilla CSS with design tokens
-- **Build:** Vite + Cargo
-- **CI/CD:** GitHub Actions (auto-build for Windows/macOS/Linux)
+```
+┌──────────────────────────────────────────────────┐
+│           OpenClaw Launcher (Tauri v2)            │
+├───────────────────┬──────────────────────────────┤
+│  React Frontend   │     Rust Backend              │
+│                   │                               │
+│  ┌─────────────┐  │  ┌──────────────────────┐     │
+│  │ SetupWizard │  │  │  environment.rs       │     │
+│  │ Dashboard   │  │  │  ├ Node.js download   │     │
+│  │ ModelsTab   │  │  │  ├ Sandbox mgmt      │     │
+│  │ SettingsTab │  │  │  └ Mirror fallback   │     │
+│  └─────────────┘  │  ├──────────────────────┤     │
+│                   │  │  setup.rs             │     │
+│  Hooks:           │  │  ├ Source download    │     │
+│  ├ useSetup      │  │  ├ ZIP extraction     │     │
+│  ├ useService    │  │  └ npm install        │     │
+│  ├ useConfig     │  │  ├──────────────────────┤     │
+│  └ useLogs       │  │  service.rs            │     │
+│                   │  │  ├ Process lifecycle  │     │
+│  Components:      │  │  ├ Port auto-scan     │     │
+│  ├ Header        │  │  └ Log streaming      │     │
+│  ├ ApiKeyModal   │  │  ├──────────────────────┤     │
+│  ├ ModelSwitch   │  │  config.rs             │     │
+│  └ StartupOverlay│  │  ├ API Key mgmt       │     │
+│                   │  │  └ Model switching    │     │
+│                   │  └──────────────────────┘     │
+├───────────────────┴──────────────────────────────┤
+│  AppData Sandbox (User-level, no admin)           │
+│  ├── node/          (Portable Node.js)            │
+│  └── openclaw-engine/ (Source + modules)          │
+└──────────────────────────────────────────────────┘
+```
+
+## 📂 Project Structure
+
+```
+openclaw-launcher/
+├── src/                        # React Frontend
+│   ├── App.tsx                 # Main app (~180 lines, orchestration only)
+│   ├── components/             # UI Components
+│   │   ├── Header.tsx          # Top bar (Logo + Version + Status)
+│   │   ├── DashboardTab.tsx    # Dashboard (Start/Stop + Status ring)
+│   │   ├── ModelsTab.tsx       # Model config page
+│   │   ├── SettingsTab.tsx     # Settings (General / Logs / About)
+│   │   ├── SetupWizard.tsx     # First-time install wizard
+│   │   ├── ApiKeyModal.tsx     # API Key config modal
+│   │   ├── ModelSwitchModal.tsx # Model switch modal
+│   │   └── StartupOverlay.tsx  # Startup loading overlay
+│   ├── hooks/                  # Custom Hooks
+│   │   ├── useSetup.ts         # Install flow state management
+│   │   ├── useService.ts       # Service start/stop + heartbeat
+│   │   ├── useConfig.ts        # API Key / model config
+│   │   └── useLogs.ts          # Log management
+│   ├── styles/                 # CSS Modules
+│   │   ├── global.css          # Design tokens + CSS variables
+│   │   ├── dashboard.css       # Dashboard styles
+│   │   ├── models.css          # Models page styles
+│   │   └── ...                 # Other modular styles
+│   └── types/index.ts          # TypeScript type definitions
+├── src-tauri/
+│   ├── src/
+│   │   ├── lib.rs              # Tauri command registration
+│   │   ├── environment.rs      # Node.js sandbox management
+│   │   ├── setup.rs            # Source download & npm install
+│   │   ├── service.rs          # Process lifecycle & logging
+│   │   ├── config.rs           # API Key & model config
+│   │   ├── providers.rs        # Provider data loading
+│   │   └── diagnostics.rs      # Diagnostic log export
+│   ├── resources/providers.json # Provider/model definitions
+│   ├── Cargo.toml              # Rust dependencies
+│   └── tauri.conf.json         # Tauri config
+├── docs/
+│   ├── PRD.md                  # Product Requirements Document
+│   ├── TODO.md                 # Development progress tracking
+│   └── phases/                 # Phased technical specs (20 stages)
+└── .github/workflows/
+    └── build.yml               # CI/CD auto-build + Release
+```
 
 ## 🗺️ Roadmap
 
-- [x] **Phase 1:** MVP Installer ✅
-- [x] **Phase 2:** UX Polish ✅
-- [x] **Phase 3:** API Key Config + UI Rewrite ✅
-- [x] **Phase 4:** Architecture Refactor (11 stages) ✅
-- [x] **Phase 5:** UI Polish + Features ✅
-- [ ] **Phase 6:** Enterprise Distribution (planned)
+- [x] **Phase 1: MVP Installer** ✅
+  - Portable Node.js download & sandbox
+  - Source ZIP fetch (smart mirror switching)
+  - Sandboxed npm install
+- [x] **Phase 2: UX Polish** ✅
+  - Config injection + workspace wizard
+  - Auto browser launch + human-readable logs
+- [x] **Phase 3: API Key Config + UI Rewrite** ✅
+  - Multi-provider API Key configuration
+  - Tab navigation + dark premium theme
+- [x] **Phase 4: Architecture Refactor** ✅
+  - Component extraction (11 stages)
+  - Custom Hooks + CSS modularization
+- [x] **Phase 5: UI Polish + Features** ✅
+  - Color system unification + icon consistency
+  - Aurora startup screen + dashboard glow effects
+  - Custom model ID input
+- [ ] **Phase 6: Enterprise Distribution** (planned)
+  - Windows code signing
+  - macOS notarization
+  - In-app auto-update
 
 ## 🤝 Contributing
 
