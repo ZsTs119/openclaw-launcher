@@ -115,8 +115,11 @@
 ## 📋 Phase 5.2: 日志诊断面板优化 ✅
 - [x] Stage 16: 日志面板简化 + 导出诊断 ZIP ✅ `v2-stage16-complete`
 
-## 🔍 Phase 5.3: 关于页面优化
-- [ ] Stage 17: 版本检查（GitHub API + 旋转动画）+ 二维码替换 🚧
+## 🔍 Phase 5.3: 关于页面优化 ✅
+- [x] Stage 17: 版本检查（GitHub API + 旋转动画）+ 二维码替换 ✅ `v2-stage17-complete`
+
+## 🎨 Phase 5.4: 安装界面 Premium 优化
+- [ ] Stage 18: 启动界面极光浮动重构（居中 + 渐变标题 + 进度条发光 + 极光背景 + 错误弹窗）🚧
 
 ---
 

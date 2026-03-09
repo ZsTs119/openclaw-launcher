@@ -83,3 +83,21 @@ style(css): adjust dashboard card spacing
 3. **渐进式重构**。不要把所有东西推倒重来。提取一个组件 → 验证 → 下一个。
 4. **保持接口**。重构过程中，所有 `invoke('xxx')` 调用和返回值类型保持不变。
 5. **切分支后清缓存**。`Remove-Item -Recurse -Force node_modules/.vite, dist`
+
+---
+
+## 🔄 标准开发循环 (Dev Cycle)
+
+每一个功能/优化任务，**必须**严格按以下 6 步循环执行：
+
+| 步骤 | 动作 | 产出 |
+|---|---|---|
+| 1. 讨论 | 与用户对齐需求和方案 | 会话记录 |
+| 2. 文档落地 | 创建/更新 Phase 文档 + `TODO.md` 标 `[ ]` | `docs/phases/*.md` + `docs/TODO.md` |
+| 3. 提交文档 | `docs: add Phase X.X plan` | Git commit（仅文档） |
+| 4. 开发实现 | 编码实现，遵循本文件的红线规范 | 代码改动 |
+| 5. 用户验收 | 用户确认 UI/功能符合预期 | 截图/录屏确认 |
+| 6. 收尾打勾 | `TODO.md` 标 `[x]` + 功能 commit | Git commit（代码+TODO） |
+
+> **铁律**：先文档，后代码。文档 commit 和代码 commit **必须分开**。
+> 每一步都留痕，确保跨 Context 的可追溯性。
