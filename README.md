@@ -17,6 +17,35 @@
 
 </div>
 
+## 📸 界面预览
+
+<div align="center">
+<table>
+<tr>
+<td align="center"><strong>仪表盘 — 就绪</strong></td>
+<td align="center"><strong>仪表盘 — 运行中</strong></td>
+</tr>
+<tr>
+<td><img src="docs/screenshot-dashboard.png" alt="仪表盘" width="400" /></td>
+<td><img src="docs/screenshot-running.png" alt="运行中" width="400" /></td>
+</tr>
+<tr>
+<td align="center"><strong>启动覆盖层</strong></td>
+<td align="center"><strong>AI 引擎配置</strong></td>
+</tr>
+<tr>
+<td><img src="docs/screenshot-startup.png" alt="启动" width="400" /></td>
+<td><img src="docs/screenshot-models.png" alt="模型配置" width="400" /></td>
+</tr>
+<tr>
+<td align="center" colspan="2"><strong>设置中心 — 关于</strong></td>
+</tr>
+<tr>
+<td align="center" colspan="2"><img src="docs/screenshot-about.png" alt="关于" width="400" /></td>
+</tr>
+</table>
+</div>
+
 ## ❓ 为什么需要 Launcher？
 
 OpenClaw 本身是一个强大的 AI 编程框架，但对非技术用户来说，安装 Node.js、配置环境变量、执行命令行操作是巨大的门槛。
