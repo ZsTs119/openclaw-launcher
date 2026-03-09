@@ -104,10 +104,13 @@
 - [x] Stage 10: 弹窗组件提取 ✅ `v2-stage10-complete`
 - [x] Stage 11: useService Hook 拆分 ✅ `v2-stage11-complete`
 
-## 🎨 Phase 5: UI 风格统一（配色 + 图标一致性）
-- [ ] Stage 12: 色彩体系重置（accent-green/blue → 白灰系）🚧
-- [ ] Stage 13: Emoji → Lucide 图标统一（25 处）
-- [ ] Stage 14: 内联色值清理 + 风格细节
+## 🎨 Phase 5: UI 风格统一（配色 + 图标一致性）✅
+- [x] Stage 12: 色彩体系重置 ✅ `v2-stage12-complete`
+- [x] Stage 13: Emoji → Lucide 图标统一 ✅ `v2-stage13-complete`
+- [x] Stage 14: 内联色值清理 ✅ `v2-stage14-complete`
+
+## 🔧 Phase 5.1: UX 细节打磨
+- [ ] Stage 15: Tab 切换抖动修复 + 表单宽度优化 + 弹窗跳动修复 + 残余绿色清理 🚧
 
 ## 🏢 Phase 6: 企业级分发
 - [ ] Sentry 错误上报 (opt-in)
