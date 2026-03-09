@@ -21,6 +21,7 @@ import { SettingsTab } from "./components/SettingsTab";
 import { ModelSwitchModal } from "./components/ModelSwitchModal";
 import { ConfirmModal } from "./components/ConfirmModal";
 import { RepairToast } from "./components/RepairToast";
+import { StartupOverlay } from "./components/StartupOverlay";
 import { useLogs } from "./hooks/useLogs";
 import { useConfig } from "./hooks/useConfig";
 import { useSetup } from "./hooks/useSetup";
@@ -68,7 +69,7 @@ function App() {
   } = useSetup({ addLog, checkApiKey, setRunning });
 
   const {
-    loading: serviceLoading,
+    loading: serviceLoading, startingUp,
     uptime, servicePort,
     reinstalling, repairing,
     handleStart, handleStop,
@@ -321,6 +322,9 @@ function App() {
         </ul>
         <p style={{ color: "var(--text-secondary)", fontSize: 12 }}>根据网络情况，可能需要 3-10 分钟</p>
       </ConfirmModal>
+
+      {/* Startup Overlay — shown while service is starting up */}
+      <StartupOverlay show={startingUp} />
 
       {/* Connection Repair Toast */}
       <RepairToast

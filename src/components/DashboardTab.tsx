@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { Activity, Box, Cpu, Hexagon, Play, Loader2, Square } from "lucide-react";
+import { Activity, Cpu, Hexagon, Play, Loader2, Square } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatUptime } from "../utils/log-humanizer";
+import logo from "../assets/logo.jpg";
 
 interface DashboardTabProps {
     running: boolean;
@@ -33,7 +34,7 @@ export function DashboardTab({
         >
             <div className="dashboard-hero">
                 <div className={`status-ring ${running ? 'running' : 'stopped'}`}>
-                    {running ? <Activity size={42} strokeWidth={1.5} color="var(--text-primary)" /> : <Box size={42} strokeWidth={1.5} color="var(--text-muted)" />}
+                    <img src={logo} alt="OpenClaw" className="status-ring-logo" />
                 </div>
                 <h2 className="hero-status-text">
                     {running ? "OpenClaw 核心运行中" : "引擎已就绪"}

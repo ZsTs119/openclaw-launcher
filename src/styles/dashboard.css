@@ -29,28 +29,50 @@
   transition: all 0.5s ease;
 }
 
+.status-ring-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .status-ring.running {
   background: var(--accent-active);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15), 0 0 40px rgba(255, 255, 255, 0.06);
-  animation: pulse-ring 3s infinite ease-in-out;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 50px rgba(255, 255, 255, 0.15);
+  animation: pulse-ring-running 2.5s infinite ease-in-out;
 }
 
 .status-ring.stopped {
   background: var(--bg-card);
-  box-shadow: 0 0 0 1px var(--border-subtle);
+  box-shadow: 0 0 0 1px var(--border-subtle), 0 0 30px rgba(255, 255, 255, 0.04);
+  animation: pulse-ring-stopped 3.5s infinite ease-in-out;
 }
 
-@keyframes pulse-ring {
+@keyframes pulse-ring-running {
   0% {
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15), 0 0 40px rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 50px rgba(255, 255, 255, 0.15);
   }
 
   50% {
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25), 0 0 60px rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), 0 0 70px rgba(255, 255, 255, 0.3);
   }
 
   100% {
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15), 0 0 40px rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 50px rgba(255, 255, 255, 0.15);
+  }
+}
+
+@keyframes pulse-ring-stopped {
+  0% {
+    box-shadow: 0 0 0 1px var(--border-subtle), 0 0 20px rgba(255, 255, 255, 0.04);
+  }
+
+  50% {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15), 0 0 40px rgba(255, 255, 255, 0.2);
+  }
+
+  100% {
+    box-shadow: 0 0 0 1px var(--border-subtle), 0 0 20px rgba(255, 255, 255, 0.04);
   }
 }
 
@@ -243,4 +265,3 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-

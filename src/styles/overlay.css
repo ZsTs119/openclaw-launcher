@@ -1,0 +1,42 @@
+/* ===== Startup Overlay ===== */
+.startup-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.startup-overlay-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.startup-overlay-logo {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
+}
+
+.startup-overlay-spinner {
+    color: var(--text-secondary);
+    animation: spin 1.2s linear infinite;
+}
+
+.startup-overlay-text {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.startup-overlay-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+}

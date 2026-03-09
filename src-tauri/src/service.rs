@@ -99,7 +99,7 @@ pub async fn start_service(
     // Find an available port starting from 18789 (OpenClaw gateway default)
     let mut chosen_port: u16 = 18789;
     let mut found = false;
-    for port in 18789..=18799 {
+    for port in 18789..=18899 {
         if is_port_available(port) {
             chosen_port = port;
             found = true;
@@ -107,7 +107,7 @@ pub async fn start_service(
         }
     }
     if !found {
-        return Err("端口 18789-18799 全部被占用。请关闭其他 OpenClaw 实例后重试。".to_string());
+        return Err("端口 18789-18899 全部被占用。请关闭其他 OpenClaw 实例后重试。".to_string());
     }
 
     if chosen_port != 18789 {

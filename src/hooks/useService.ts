@@ -35,6 +35,7 @@ export function useService({
     const [servicePort, setServicePort] = useState(18789);
     const [reinstalling, setReinstalling] = useState(false);
     const [repairing, setRepairing] = useState(false);
+    const [startingUp, setStartingUp] = useState(false);
     const uptimeRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Uptime counter
@@ -66,20 +67,41 @@ export function useService({
             (event) => setServicePort(event.payload.port)
         );
 
+        // Listen for service-ready signal to dismiss startup overlay
+        const unlistenLog = listen<{ level: string; message: string }>(
+            "service-log",
+            (event) => {
+                const msg = event.payload.message?.toLowerCase() || "";
+                if (
+                    msg.includes("listening") ||
+                    msg.includes("started on") ||
+                    msg.includes("ready on") ||
+                    msg.includes("server is running") ||
+                    msg.includes("server started") ||
+                    msg.includes("正在打开浏览器")
+                ) {
+                    setStartingUp(false);
+                }
+            }
+        );
+
         return () => {
             unlistenHeartbeat.then((fn) => fn());
             unlistenPort.then((fn) => fn());
+            unlistenLog.then((fn) => fn());
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleStart = useCallback(async () => {
         setLoading(true);
+        setStartingUp(true);
         try {
             await invoke("start_service");
             setRunning(true);
         } catch (err) {
             addLog("error", `启动失败: ${err}`);
+            setStartingUp(false);
         } finally {
             setLoading(false);
         }
@@ -139,7 +161,7 @@ export function useService({
     }, [addLog, running, servicePort, setRepairToast]);
 
     return {
-        loading,
+        loading, startingUp,
         uptime, servicePort,
         reinstalling, repairing,
         handleStart,
