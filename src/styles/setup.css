@@ -9,35 +9,36 @@
   justify-content: center;
   height: 100vh;
   background: var(--bg-primary);
-  overflow: hidden;
 }
 
 /* Aurora layer 1: purple wisp */
 .startup-container::before {
   content: "";
   position: absolute;
-  top: -10%;
-  left: 10%;
+  top: 2%;
+  left: 15%;
   width: 500px;
   height: 300px;
-  background: radial-gradient(ellipse, rgba(139, 92, 246, 0.12), transparent 70%);
-  filter: blur(60px);
+  background: radial-gradient(ellipse, rgba(139, 92, 246, 0.15), transparent 70%);
+  filter: blur(70px);
   animation: aurora-drift-1 8s ease-in-out infinite alternate;
   pointer-events: none;
+  z-index: 0;
 }
 
 /* Aurora layer 2: cyan wisp */
 .startup-container::after {
   content: "";
   position: absolute;
-  top: -8%;
-  right: 5%;
+  top: 0%;
+  right: 10%;
   width: 450px;
   height: 280px;
-  background: radial-gradient(ellipse, rgba(6, 182, 212, 0.10), transparent 70%);
-  filter: blur(50px);
+  background: radial-gradient(ellipse, rgba(6, 182, 212, 0.12), transparent 70%);
+  filter: blur(60px);
   animation: aurora-drift-2 10s ease-in-out infinite alternate;
   pointer-events: none;
+  z-index: 0;
 }
 
 @keyframes aurora-drift-1 {
