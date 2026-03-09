@@ -66,7 +66,7 @@ export function ModelsTab({
             </div>
 
             {selectedCategory === "custom" ? (
-                <div className="custom-config animate-fade-in" style={{ maxWidth: 640, margin: '0 auto' }}>
+                <div className="custom-config animate-fade-in">
                     <div className="form-group">
                         <label>API Base URL</label>
                         <input type="url" placeholder="https://your-relay.com/v1" value={baseUrlInput}
