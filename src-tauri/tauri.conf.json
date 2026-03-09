@@ -13,10 +13,10 @@
     "windows": [
       {
         "title": "OpenClaw Launcher",
-        "width": 900,
-        "height": 640,
-        "minWidth": 800,
-        "minHeight": 600,
+        "width": 1280,
+        "height": 800,
+        "minWidth": 860,
+        "minHeight": 640,
         "center": true
       }
     ],

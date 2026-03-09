@@ -224,7 +224,7 @@ function App() {
                       url: data.html_url || 'https://github.com/ZsTs119/openclaw-launcher/releases',
                     });
                   } else {
-                    setFeedbackModal({ title: '无可用更新', msg: `当前版本 v${APP_VERSION} 已是最新版本 ✅` });
+                    setFeedbackModal({ title: '无可用更新', msg: `当前版本 v${APP_VERSION} 已是最新版本` });
                   }
                 } catch {
                   setFeedbackModal({ title: '网络错误', msg: '检查更新失败，请检查网络连接' });
