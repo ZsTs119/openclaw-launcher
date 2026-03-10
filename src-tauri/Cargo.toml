@@ -1,6 +1,6 @@
 [package]
 name = "openclaw-launcher"
-version = "0.4.0"
+version = "0.4.1"
 description = "One-click installer & launcher for OpenClaw AI coding assistant"
 authors = ["ZsTs119 <zsts@foxmail.com>"]
 edition = "2021"

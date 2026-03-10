@@ -35,7 +35,7 @@ function App() {
   const [running, setRunning] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [feedbackModal, setFeedbackModal] = useState<{ title: string; msg: string; url?: string } | null>(null);
-  const APP_VERSION = "0.4.0";
+  const APP_VERSION = "0.4.1";
 
   // === Hooks ===
   const {
