@@ -16,6 +16,10 @@ use crate::paths;
 
 const OPENCLAW_REPO: &str = "openclaw/openclaw";
 
+/// Pinned OpenClaw version — last stable release before device-identity was mandatory (v2026.2.19+)
+/// See: https://github.com/openclaw/openclaw/releases/tag/v2026.2.6-1
+const PINNED_VERSION: &str = "v2026.2.6-1";
+
 /// Quick URL reachability test (3 second timeout)
 pub async fn test_url_reachable(url: &str) -> bool {
     let client = reqwest::Client::builder()
@@ -57,34 +61,62 @@ pub fn extract_zip(archive_path: &PathBuf, dest: &PathBuf) -> Result<(), String>
     Ok(())
 }
 
+/// Check if OpenClaw needs to be (re)downloaded.
+/// Returns true if: source is missing, or installed version doesn't match PINNED_VERSION.
+pub fn needs_download() -> Result<bool, String> {
+    let openclaw_dir = paths::get_openclaw_dir()?;
+    if !openclaw_dir.join("package.json").exists() {
+        return Ok(true);
+    }
+    let version_file = openclaw_dir.join(".openclaw_version");
+    if !version_file.exists() {
+        return Ok(true); // Old installation without version marker
+    }
+    let installed = std::fs::read_to_string(&version_file).unwrap_or_default();
+    Ok(installed.trim() != PINNED_VERSION)
+}
+
 /// Download OpenClaw source code as ZIP and extract.
+/// Downloads a pinned release version for stability.
 /// Uses GitHub mirror fallback for China users.
 #[tauri::command]
 pub async fn download_openclaw_source(app: tauri::AppHandle) -> Result<String, String> {
     let openclaw_dir = paths::get_openclaw_dir()?;
-    if openclaw_dir.join("package.json").exists() {
-        return Ok("OpenClaw source already exists".to_string());
+
+    // Check if we need to download (missing or version mismatch)
+    if openclaw_dir.join("package.json").exists() && !needs_download()? {
+        return Ok("OpenClaw source already exists (version matched)".to_string());
+    }
+
+    // If version mismatch, remove old source to force clean install
+    if openclaw_dir.exists() && openclaw_dir.join("package.json").exists() {
+        let _ = app.emit("setup-progress", serde_json::json!({
+            "stage": "download_openclaw",
+            "message": format!("检测到版本不匹配，正在更新到 {}...", PINNED_VERSION),
+            "percent": 60
+        }));
+        let _ = std::fs::remove_dir_all(&openclaw_dir);
     }
 
     let _ = app.emit("setup-progress", serde_json::json!({
         "stage": "download_openclaw",
-        "message": "正在获取 OpenClaw 最新源码...",
+        "message": format!("正在获取 OpenClaw {} 版本...", PINNED_VERSION),
         "percent": 62
     }));
 
-    // Primary: GitHub, Fallback: GitHub mirror services
+    // Primary: GitHub tagged release, Fallback: mirror services
     let primary_url = format!(
-        "https://github.com/{}/archive/refs/heads/main.zip",
-        OPENCLAW_REPO
+        "https://github.com/{}/archive/refs/tags/{}.zip",
+        OPENCLAW_REPO, PINNED_VERSION
     );
     let fallback_urls = vec![
         format!(
-            "https://ghfast.top/https://github.com/{}/archive/refs/heads/main.zip",
-            OPENCLAW_REPO
+            "https://ghfast.top/https://github.com/{}/archive/refs/tags/{}.zip",
+            OPENCLAW_REPO, PINNED_VERSION
         ),
         format!(
-            "https://mirror.ghproxy.com/https://github.com/{}/archive/refs/heads/main.zip",
-            OPENCLAW_REPO
+            "https://mirror.ghproxy.com/https://github.com/{}/archive/refs/tags/{}.zip",
+            OPENCLAW_REPO, PINNED_VERSION
         ),
     ];
 
@@ -185,11 +217,15 @@ pub async fn download_openclaw_source(app: tauri::AppHandle) -> Result<String, S
         return Err("解压成功但未找到 package.json，源码可能不完整".to_string());
     }
 
+    // Write version marker for future detection
+    let version_file = openclaw_dir.join(".openclaw_version");
+    let _ = std::fs::write(&version_file, PINNED_VERSION);
+
     let _ = app.emit("setup-progress", serde_json::json!({
         "stage": "openclaw_ready",
-        "message": "✅ OpenClaw 源码获取完成！",
+        "message": format!("✅ OpenClaw {} 源码获取完成！", PINNED_VERSION),
         "percent": 85
     }));
 
-    Ok(format!("OpenClaw source at: {}", openclaw_dir.display()))
+    Ok(format!("OpenClaw {} source at: {}", PINNED_VERSION, openclaw_dir.display()))
 }

@@ -14,11 +14,15 @@ use crate::paths;
 use crate::download;
 use crate::installer;
 
-/// Check if OpenClaw source is already installed
+/// Check if OpenClaw source is already installed (and version matches)
 #[tauri::command]
 pub fn check_openclaw_exists() -> Result<bool, String> {
     let dir = paths::get_openclaw_dir()?;
-    Ok(dir.join("package.json").exists())
+    if !dir.join("package.json").exists() {
+        return Ok(false);
+    }
+    // Also check version — if mismatched, treat as not installed
+    Ok(!download::needs_download()?)
 }
 
 /// Check if node_modules is fully installed
