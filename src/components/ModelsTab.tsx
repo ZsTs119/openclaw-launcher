@@ -4,13 +4,13 @@
 /**
  * ModelsTab Component — AI Engine Page (Redesigned)
  *
- * Shows saved providers as card list + "add provider" button.
- * Each card shows provider name, base URL, model count, and actions.
+ * Shows saved providers as card list with clickable model chips.
+ * Active model is highlighted; click a different model + confirm to switch.
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Cpu, Plus, Trash2, Server, Key, ChevronDown, ChevronUp } from "lucide-react";
+import { Cpu, Plus, Trash2, Server, Key, ChevronDown, ChevronUp, Check, Edit3 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Modal } from "./ui/Modal";
 import type { SavedProvider, ProviderInfo, CurrentConfig } from "../types";
@@ -35,6 +35,7 @@ interface ModelsTabProps {
     handleSaveConfig: () => void;
     configVersion: number;
     resetModalState: () => void;
+    onConfigChanged?: () => void;
 }
 
 export function ModelsTab({
@@ -42,12 +43,18 @@ export function ModelsTab({
     currentConfig,
     configVersion,
     resetModalState,
+    onConfigChanged,
 }: ModelsTabProps) {
     const [savedProviders, setSavedProviders] = useState<SavedProvider[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
     const [deleting, setDeleting] = useState(false);
+    // Model selection state
+    const [pendingModel, setPendingModel] = useState<string | null>(null);
+    const [customModelInput, setCustomModelInput] = useState("");
+    const [showCustomInput, setShowCustomInput] = useState(false);
+    const [switching, setSwitching] = useState(false);
 
     const loadProviders = useCallback(async () => {
         setLoading(true);
@@ -78,6 +85,31 @@ export function ModelsTab({
             console.error("Delete failed:", err);
         } finally {
             setDeleting(false);
+        }
+    };
+
+    // Derive current active model from config
+    const currentFullModel = currentConfig?.model || "";
+    const currentProviderName = currentConfig?.provider || "";
+
+    const isActiveModel = (providerName: string, modelId: string) =>
+        currentFullModel === `${providerName}/${modelId}`;
+
+    const handleSwitchModel = async (providerName: string, modelId: string) => {
+        const fullId = `${providerName}/${modelId}`;
+        if (fullId === currentFullModel) return;
+        setSwitching(true);
+        try {
+            await invoke("set_default_model", { modelId: fullId });
+            setPendingModel(null);
+            setCustomModelInput("");
+            setShowCustomInput(false);
+            // Trigger config refresh in parent
+            onConfigChanged?.();
+        } catch (err) {
+            console.error("Switch failed:", err);
+        } finally {
+            setSwitching(false);
         }
     };
 
@@ -124,66 +156,142 @@ export function ModelsTab({
                 </div>
             ) : (
                 <div className="provider-cards-list">
-                    {savedProviders.map((sp) => (
-                        <motion.div
-                            key={sp.name}
-                            className={`provider-saved-card ${currentConfig?.provider === sp.name ? "active" : ""}`}
-                            layout
-                        >
-                            <div className="provider-saved-header" onClick={() => setExpandedProvider(expandedProvider === sp.name ? null : sp.name)}>
-                                <div className="provider-saved-icon">
-                                    <Server size={18} strokeWidth={1.5} />
-                                </div>
-                                <div className="provider-saved-info">
-                                    <div className="provider-saved-name">
-                                        {sp.name}
-                                        {currentConfig?.provider === sp.name && <span className="agent-badge">当前使用</span>}
-                                        {sp.has_api_key && <Key size={12} strokeWidth={1.5} style={{ color: "var(--accent-green)", marginLeft: 4 }} />}
+                    {savedProviders.map((sp) => {
+                        const isActive = currentProviderName === sp.name;
+                        return (
+                            <motion.div
+                                key={sp.name}
+                                className={`provider-saved-card ${isActive ? "active" : ""}`}
+                                layout
+                            >
+                                <div className="provider-saved-header" onClick={() => {
+                                    setExpandedProvider(expandedProvider === sp.name ? null : sp.name);
+                                    setPendingModel(null);
+                                    setCustomModelInput("");
+                                    setShowCustomInput(false);
+                                }}>
+                                    <div className="provider-saved-icon">
+                                        <Server size={18} strokeWidth={1.5} />
                                     </div>
-                                    <div className="provider-saved-url">{sp.base_url || "无 Base URL"}</div>
+                                    <div className="provider-saved-info">
+                                        <div className="provider-saved-name">
+                                            {sp.name}
+                                            {isActive && <span className="agent-badge">当前使用</span>}
+                                            {sp.has_api_key && <Key size={12} strokeWidth={1.5} style={{ color: "var(--accent-green)", marginLeft: 4 }} />}
+                                        </div>
+                                        <div className="provider-saved-url">{sp.base_url || "无 Base URL"}</div>
+                                    </div>
+                                    <div className="provider-saved-meta">
+                                        <span className="agent-meta-tag">{sp.model_count} 个模型</span>
+                                        {sp.api && <span className="agent-meta-tag">{sp.api}</span>}
+                                    </div>
+                                    <div className="provider-saved-expand">
+                                        {expandedProvider === sp.name ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                    </div>
                                 </div>
-                                <div className="provider-saved-meta">
-                                    <span className="agent-meta-tag">{sp.model_count} 个模型</span>
-                                    {sp.api && <span className="agent-meta-tag">{sp.api}</span>}
-                                </div>
-                                <div className="provider-saved-expand">
-                                    {expandedProvider === sp.name ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                                </div>
-                            </div>
 
-                            {/* Expanded: model list */}
-                            <AnimatePresence>
-                                {expandedProvider === sp.name && (
-                                    <motion.div
-                                        className="provider-saved-models"
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: "auto", opacity: 1 }}
-                                        exit={{ height: 0, opacity: 0 }}
-                                        transition={{ duration: 0.2 }}
-                                    >
-                                        <div className="provider-model-grid">
-                                            {sp.models.map((m) => (
-                                                <div key={m.id} className="provider-model-chip">
-                                                    {m.name || m.id}
+                                {/* Expanded: clickable model chips + actions */}
+                                <AnimatePresence>
+                                    {expandedProvider === sp.name && (
+                                        <motion.div
+                                            className="provider-saved-models"
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: "auto", opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.2 }}
+                                        >
+                                            <div className="provider-model-grid">
+                                                {sp.models.map((m) => {
+                                                    const active = isActiveModel(sp.name, m.id);
+                                                    const pending = pendingModel === m.id;
+                                                    return (
+                                                        <button
+                                                            key={m.id}
+                                                            className={`provider-model-chip ${active ? "chip-active" : ""} ${pending ? "chip-pending" : ""}`}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (active) return;
+                                                                setPendingModel(m.id);
+                                                                setCustomModelInput("");
+                                                                setShowCustomInput(false);
+                                                            }}
+                                                        >
+                                                            {active && <Check size={12} strokeWidth={2} />}
+                                                            {m.name || m.id}
+                                                        </button>
+                                                    );
+                                                })}
+                                                {/* Custom model input toggle */}
+                                                <button
+                                                    className={`provider-model-chip custom-toggle ${showCustomInput ? "chip-pending" : ""}`}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setShowCustomInput(!showCustomInput);
+                                                        setPendingModel(null);
+                                                    }}
+                                                >
+                                                    <Edit3 size={12} strokeWidth={1.5} /> 自定义
+                                                </button>
+                                            </div>
+
+                                            {/* Custom model input */}
+                                            {showCustomInput && (
+                                                <div style={{ marginBottom: 8 }}>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="输入自定义模型 ID..."
+                                                        value={customModelInput}
+                                                        onChange={(e) => { setCustomModelInput(e.target.value); setPendingModel(null); }}
+                                                        className="input-field"
+                                                        style={{ width: "100%", fontSize: 13 }}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
                                                 </div>
-                                            ))}
-                                            {sp.models.length === 0 && (
-                                                <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>无已配置模型</div>
                                             )}
-                                        </div>
-                                        <div className="provider-saved-actions">
-                                            <button
-                                                className="btn-ghost btn-danger-ghost"
-                                                onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(sp.name); }}
-                                            >
-                                                <Trash2 size={14} strokeWidth={1.5} /> 删除
-                                            </button>
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </motion.div>
-                    ))}
+
+                                            <div className="provider-saved-actions">
+                                                {/* Switch model button: show when a different model or custom is selected */}
+                                                {(pendingModel || (showCustomInput && customModelInput.trim())) && (
+                                                    <button
+                                                        className="btn-primary"
+                                                        style={{ fontSize: 13, padding: "6px 16px" }}
+                                                        disabled={switching}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const modelId = pendingModel || customModelInput.trim();
+                                                            if (modelId) handleSwitchModel(sp.name, modelId);
+                                                        }}
+                                                    >
+                                                        {switching ? "切换中..." : "确认切换"}
+                                                    </button>
+                                                )}
+                                                {/* Switch to this provider (non-active card, no model selected) */}
+                                                {!isActive && !pendingModel && !(showCustomInput && customModelInput.trim()) && sp.models.length > 0 && (
+                                                    <button
+                                                        className="btn-primary"
+                                                        style={{ fontSize: 13, padding: "6px 16px" }}
+                                                        disabled={switching}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleSwitchModel(sp.name, sp.models[0].id);
+                                                        }}
+                                                    >
+                                                        {switching ? "切换中..." : "切换到此模型商"}
+                                                    </button>
+                                                )}
+                                                <button
+                                                    className="btn-ghost btn-danger-ghost"
+                                                    onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(sp.name); }}
+                                                >
+                                                    <Trash2 size={14} strokeWidth={1.5} /> 删除
+                                                </button>
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </motion.div>
+                        );
+                    })}
                 </div>
             )}
 

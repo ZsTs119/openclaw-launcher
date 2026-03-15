@@ -86,20 +86,42 @@ pub fn get_current_config() -> Result<CurrentConfig, String> {
 
     let content = std::fs::read_to_string(&config_path)
         .map_err(|e| format!("读取配置失败: {}", e))?;
+    let config: serde_json::Value = serde_json::from_str(&content)
+        .unwrap_or(serde_json::json!({}));
 
-    let has_key = content.contains("apiKey");
-    let model = extract_json_value(&content, "primary");
-    let provider = extract_first_provider(&content);
+    // Check if any provider has an apiKey
+    let has_key = config.get("models")
+        .and_then(|m| m.get("providers"))
+        .and_then(|p| p.as_object())
+        .map(|obj| obj.values().any(|v|
+            v.get("apiKey").and_then(|k| k.as_str()).map(|s| !s.is_empty()).unwrap_or(false)
+            || v.get("auth").is_some()
+        ))
+        .unwrap_or(false);
+
+    // Get primary model — format is "provider/model-id"
+    let primary = config.get("agents")
+        .and_then(|a| a.get("defaults"))
+        .and_then(|d| d.get("model"))
+        .and_then(|m| m.get("primary"))
+        .and_then(|p| p.as_str())
+        .map(|s| s.to_string());
+
+    // Extract provider from primary  (e.g. "bailian/glm-5" → "bailian")
+    let provider = primary.as_ref()
+        .and_then(|p| p.split('/').next())
+        .map(|s| s.to_string());
 
     Ok(CurrentConfig {
         has_api_key: has_key,
         provider,
-        model,
+        model: primary,
         base_url: None,
     })
 }
 
-/// Save API key config — writes OpenClaw-compatible config
+/// Save API key config — MERGES provider into existing openclaw.json
+/// instead of replacing the entire file.
 #[tauri::command]
 pub fn save_api_config(
     app: tauri::AppHandle,
@@ -109,8 +131,9 @@ pub fn save_api_config(
     model: Option<String>,
 ) -> Result<String, String> {
     let openclaw_dir = get_user_openclaw_dir()?;
+    let config_path = openclaw_dir.join("openclaw.json");
 
-    // Get provider info
+    // Get provider info from our built-in catalog
     let providers = get_providers();
     let provider_info = providers.iter().find(|p| p.id == provider);
     let effective_base_url = base_url.clone()
@@ -118,7 +141,7 @@ pub fn save_api_config(
         .unwrap_or_default();
     let api_type = provider_info.map(|p| p.api_type.as_str()).unwrap_or("openai-completions");
 
-    // Determine model — add provider prefix: "provider/model-id"
+    // Determine model
     let selected_model = model.unwrap_or_else(|| {
         provider_info
             .and_then(|p| p.models.first())
@@ -127,114 +150,123 @@ pub fn save_api_config(
     });
     let full_model_id = format!("{}/{}", provider, selected_model);
 
-    // Build model definitions JSON
-    let model_defs: Vec<String> = provider_info
+    // Build the new provider entry as serde_json::Value
+    let model_defs: Vec<serde_json::Value> = provider_info
         .map(|p| &p.models)
         .unwrap_or(&vec![])
         .iter()
-        .map(|m| {
-            format!(
-                r#"          {{
-            "id": "{}",
-            "name": "{}",
+        .map(|m| serde_json::json!({
+            "id": m.id,
+            "name": m.name,
             "reasoning": false,
             "input": ["text"],
-            "cost": {{ "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }},
-            "contextWindow": {},
-            "maxTokens": {}
-          }}"#,
-                m.id, m.name, m.context_window, m.max_tokens
-            )
-        })
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": m.context_window,
+            "maxTokens": m.max_tokens,
+        }))
         .collect();
-    let model_defs_json = model_defs.join(",\n");
 
-    // Build models map for agents.defaults.models
-    let models_map: Vec<String> = provider_info
-        .map(|p| &p.models)
-        .unwrap_or(&vec![])
-        .iter()
-        .map(|m| format!("        \"{}/{}\": {{}}", provider, m.id))
-        .collect();
-    let models_map_json = models_map.join(",\n");
+    let new_provider_entry = serde_json::json!({
+        "baseUrl": effective_base_url,
+        "apiKey": api_key,
+        "api": api_type,
+        "models": model_defs,
+    });
 
-    // Workspace path
-    let workspace = dirs::document_dir()
-        .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("Documents"))
-        .join("OpenClaw-Projects");
-    let _ = std::fs::create_dir_all(&workspace);
+    // Read existing config or start fresh
+    let mut config: serde_json::Value = if config_path.exists() {
+        let content = std::fs::read_to_string(&config_path)
+            .map_err(|e| format!("读取配置失败: {}", e))?;
+        serde_json::from_str(&content).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
 
-    // Write the full OpenClaw-compatible config
-    // Use mode: "replace" so we fully overwrite any old model catalog
-    let config_content = format!(
-        r#"{{
-  "models": {{
-    "providers": {{
-      "{}": {{
-        "baseUrl": "{}",
-        "apiKey": "{}",
-        "api": "{}",
-        "models": [
-{}
-        ]
-      }}
-    }}
-  }},
-  "agents": {{
-    "defaults": {{
-      "workspace": "{}",
-      "model": {{
-        "primary": "{}"
-      }},
-      "models": {{
-{}
-      }}
-    }}
-  }},
-  "gateway": {{
-    "mode": "local",
-    "auth": {{
-      "mode": "token",
-      "token": "openclaw-launcher-local"
-    }},
-    "controlUi": {{
-      "allowInsecureAuth": true,
-      "dangerouslyDisableDeviceAuth": true
-    }}
-  }}
-}}"#,
-        provider,
-        effective_base_url,
-        api_key,
-        api_type,
-        model_defs_json,
-        workspace.to_string_lossy().replace('\\', "\\\\"),
-        full_model_id,
-        models_map_json,
-    );
+    // Ensure models.providers exists
+    if config.get("models").is_none() {
+        config["models"] = serde_json::json!({});
+    }
+    if config["models"].get("providers").is_none() {
+        config["models"]["providers"] = serde_json::json!({});
+    }
 
-    let config_path = openclaw_dir.join("openclaw.json");
-    std::fs::write(&config_path, &config_content)
+    // MERGE: add/update the provider (preserves all other providers)
+    config["models"]["providers"][&provider] = new_provider_entry;
+
+    // Set default model
+    if config.get("agents").is_none() {
+        config["agents"] = serde_json::json!({});
+    }
+    if config["agents"].get("defaults").is_none() {
+        config["agents"]["defaults"] = serde_json::json!({});
+    }
+    config["agents"]["defaults"]["model"] = serde_json::json!({ "primary": full_model_id });
+
+    // Add models to agents.defaults.models map (merge, don't replace)
+    if config["agents"]["defaults"].get("models").is_none() {
+        config["agents"]["defaults"]["models"] = serde_json::json!({});
+    }
+    if let Some(pi) = provider_info {
+        for m in &pi.models {
+            let key = format!("{}/{}", provider, m.id);
+            config["agents"]["defaults"]["models"][&key] = serde_json::json!({});
+        }
+    }
+
+    // Ensure workspace
+    if config["agents"]["defaults"].get("workspace").is_none() {
+        let workspace = dirs::document_dir()
+            .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("Documents"))
+            .join("OpenClaw-Projects");
+        let _ = std::fs::create_dir_all(&workspace);
+        config["agents"]["defaults"]["workspace"] = serde_json::Value::String(
+            workspace.to_string_lossy().to_string()
+        );
+    }
+
+    // Ensure gateway config
+    if config.get("gateway").is_none() {
+        config["gateway"] = serde_json::json!({
+            "mode": "local",
+            "auth": {
+                "mode": "token",
+                "token": "openclaw-launcher-local"
+            },
+            "controlUi": {
+                "allowInsecureAuth": true,
+                "dangerouslyDisableDeviceAuth": true
+            }
+        });
+    }
+
+    // Write merged config
+    let output = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("序列化失败: {}", e))?;
+    std::fs::write(&config_path, &output)
         .map_err(|e| format!("写入配置文件失败: {}", e))?;
 
-    // Also write agents/main/agent/models.json — this is where the agent reads its model catalog
-    // Per docs: "Non-empty agent models.json apiKey/baseUrl win"
+    // Also MERGE into agents/main/agent/models.json
     let agent_dir = openclaw_dir.join("agents").join("main").join("agent");
     let _ = std::fs::create_dir_all(&agent_dir);
-    let models_json = format!(r#"{{
-  "providers": {{
-    "{}": {{
-      "baseUrl": "{}",
-      "apiKey": "{}",
-      "api": "{}",
-      "models": [
-{}
-      ]
-    }}
-  }}
-}}"#, provider, effective_base_url, api_key, api_type, model_defs_json);
     let models_path = agent_dir.join("models.json");
-    let _ = std::fs::write(&models_path, &models_json);
+    let mut agent_models: serde_json::Value = if models_path.exists() {
+        let content = std::fs::read_to_string(&models_path).unwrap_or_default();
+        serde_json::from_str(&content).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+    if agent_models.get("providers").is_none() {
+        agent_models["providers"] = serde_json::json!({});
+    }
+    agent_models["providers"][&provider] = serde_json::json!({
+        "baseUrl": effective_base_url,
+        "apiKey": api_key,
+        "api": api_type,
+        "models": model_defs,
+    });
+    let _ = std::fs::write(&models_path,
+        serde_json::to_string_pretty(&agent_models).unwrap_or_default()
+    );
 
     let _ = app.emit("config-updated", serde_json::json!({
         "provider": provider,
@@ -248,7 +280,7 @@ pub fn save_api_config(
     ))
 }
 
-/// Set the default model
+/// Set the default model using serde_json
 #[tauri::command]
 pub fn set_default_model(
     app: tauri::AppHandle,
@@ -257,31 +289,51 @@ pub fn set_default_model(
     let openclaw_dir = get_user_openclaw_dir()?;
     let config_path = openclaw_dir.join("openclaw.json");
 
-    if config_path.exists() {
-        let content = std::fs::read_to_string(&config_path)
-            .map_err(|e| format!("读取配置失败: {}", e))?;
+    if !config_path.exists() {
+        return Err("配置文件不存在，请先配置 API Key".into());
+    }
 
-        // Get current provider to build full model ID (provider/model_id)
-        let current_provider = extract_first_provider(&content).unwrap_or_default();
-        let full_model_id = if current_provider.is_empty() || model_id.starts_with(&format!("{}/", current_provider)) {
+    let content = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("读取配置失败: {}", e))?;
+    let mut config: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("解析配置失败: {}", e))?;
+
+    // Ensure the model_id has provider/ prefix
+    let full_model_id = if model_id.contains('/') {
+        model_id.clone()
+    } else {
+        // Try to get the first provider name from config
+        let first_provider = config.get("models")
+            .and_then(|m| m.get("providers"))
+            .and_then(|p| p.as_object())
+            .and_then(|obj| obj.keys().next().cloned())
+            .unwrap_or_default();
+        if first_provider.is_empty() {
             model_id.clone()
         } else {
-            format!("{}/{}", current_provider, model_id)
-        };
+            format!("{}/{}", first_provider, model_id)
+        }
+    };
 
-        // Replace the primary model in config
-        let updated = replace_primary_model(&content, &full_model_id);
-        std::fs::write(&config_path, &updated)
-            .map_err(|e| format!("写入配置失败: {}", e))?;
-
-        let _ = app.emit("config-updated", serde_json::json!({
-            "model": full_model_id,
-        }));
-
-        Ok(format!("✅ 默认模型已切换为: {}", full_model_id))
-    } else {
-        Err("配置文件不存在，请先配置 API Key".into())
+    // Update agents.defaults.model.primary
+    if config.get("agents").is_none() {
+        config["agents"] = serde_json::json!({});
     }
+    if config["agents"].get("defaults").is_none() {
+        config["agents"]["defaults"] = serde_json::json!({});
+    }
+    config["agents"]["defaults"]["model"] = serde_json::json!({ "primary": full_model_id });
+
+    let output = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("序列化失败: {}", e))?;
+    std::fs::write(&config_path, &output)
+        .map_err(|e| format!("写入配置失败: {}", e))?;
+
+    let _ = app.emit("config-updated", serde_json::json!({
+        "model": full_model_id,
+    }));
+
+    Ok(format!("✅ 默认模型已切换为: {}", full_model_id))
 }
 
 
@@ -309,63 +361,4 @@ pub fn reset_config(app: tauri::AppHandle) -> Result<String, String> {
     }));
 
     Ok("✅ 配置已重置，请重新配置 API Key".to_string())
-}
-
-// ===== Helper functions =====
-
-/// Replace "primary" model value in JSON content
-fn replace_primary_model(content: &str, new_model: &str) -> String {
-    // Find "primary": "xxx" and replace xxx
-    if let Some(pos) = content.find("\"primary\"") {
-        let after = &content[pos..];
-        if let Some(colon) = after.find(':') {
-            let value_start = &after[colon + 1..];
-            if let Some(q1) = value_start.find('"') {
-                if let Some(q2) = value_start[q1 + 1..].find('"') {
-                    let abs_start = pos + colon + 1 + q1 + 1;
-                    let abs_end = abs_start + q2;
-                    let mut result = String::new();
-                    result.push_str(&content[..abs_start]);
-                    result.push_str(new_model);
-                    result.push_str(&content[abs_end..]);
-                    return result;
-                }
-            }
-        }
-    }
-    content.to_string()
-}
-
-/// Extract a simple string value from JSON-like content by key
-fn extract_json_value(content: &str, key: &str) -> Option<String> {
-    let pattern = format!("\"{}\"", key);
-    if let Some(pos) = content.find(&pattern) {
-        let after = &content[pos + pattern.len()..];
-        if let Some(colon_pos) = after.find(':') {
-            let value_part = after[colon_pos + 1..].trim();
-            if value_part.starts_with('"') {
-                if let Some(end) = value_part[1..].find('"') {
-                    return Some(value_part[1..end + 1].to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Extract the first provider name from models.providers
-fn extract_first_provider(content: &str) -> Option<String> {
-    // Look for "providers": { "xxx" pattern
-    if let Some(pos) = content.find("\"providers\"") {
-        let after = &content[pos + 11..];
-        if let Some(brace) = after.find('{') {
-            let inner = &after[brace + 1..];
-            if let Some(q1) = inner.find('"') {
-                if let Some(q2) = inner[q1 + 1..].find('"') {
-                    return Some(inner[q1 + 1..q1 + 1 + q2].to_string());
-                }
-            }
-        }
-    }
-    None
 }

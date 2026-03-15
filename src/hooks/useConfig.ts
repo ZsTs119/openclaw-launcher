@@ -101,7 +101,14 @@ export function useConfig({ addLog, running, setRunning }: UseConfigOptions) {
             setSelectedModel(modelId);
             setConfigStatus(result);
             addLog("success", result);
-            setCurrentConfig(prev => prev ? { ...prev, model: modelId } : prev);
+            // Extract provider from "provider/model" format
+            const parts = modelId.split("/");
+            const newProvider = parts.length > 1 ? parts[0] : undefined;
+            setCurrentConfig(prev => prev ? {
+                ...prev,
+                model: modelId,
+                provider: newProvider ?? prev.provider,
+            } : prev);
         } catch (err) {
             setConfigStatus(`[!] 切换失败: ${err}`);
         }

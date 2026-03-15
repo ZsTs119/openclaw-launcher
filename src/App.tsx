@@ -232,6 +232,7 @@ function App() {
               handleSaveConfig={handleSaveConfig}
               configVersion={configVersion}
               resetModalState={resetModalState}
+              onConfigChanged={checkApiKey}
             />
           )}
 
