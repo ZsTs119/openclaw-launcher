@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
+import { getVersion } from "@tauri-apps/api/app";
 import { Activity, SlidersHorizontal, Network } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import "./App.css";
@@ -36,8 +37,13 @@ function App() {
   const [running, setRunning] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [feedbackModal, setFeedbackModal] = useState<{ title: string; msg: string; url?: string } | null>(null);
-  const APP_VERSION = "0.4.4";
+  const [appVersion, setAppVersion] = useState("0.0.0");
   const updateChecked = useRef(false);
+
+  // Load version from tauri.conf.json (single source of truth)
+  useEffect(() => {
+    getVersion().then(v => setAppVersion(v)).catch(() => { });
+  }, []);
 
   // === Hooks ===
   const {
@@ -88,7 +94,7 @@ function App() {
 
   // ===== Startup update check (runs once when phase becomes ready) =====
   useEffect(() => {
-    if (phase !== "ready" || updateChecked.current) return;
+    if (phase !== "ready" || updateChecked.current || appVersion === "0.0.0") return;
     updateChecked.current = true;
     (async () => {
       try {
@@ -98,36 +104,34 @@ function App() {
         const rawTag = data.tag_name || '';
         const isSemver = /^v?\d+\.\d+\.\d+$/.test(rawTag);
         const latestVersion = rawTag.replace(/^v/, '');
-        if (isSemver && latestVersion !== APP_VERSION) {
+        if (isSemver && latestVersion !== appVersion) {
           setFeedbackModal({
             title: '发现更新',
-            msg: `发现新版本 v${latestVersion}！\n当前版本 v${APP_VERSION}`,
+            msg: `发现新版本 v${latestVersion}！\n当前版本 v${appVersion}`,
             url: data.html_url || 'https://github.com/ZsTs119/openclaw-launcher/releases',
           });
         }
       } catch {
-        // Silently ignore network errors — don't bother the user
+        // Silently ignore network errors
       }
     })();
-  }, [phase]);
+  }, [phase, appVersion]);
 
   // ===== Tray restart-service listener =====
   useEffect(() => {
     const unlisten = listen('tray-restart-service', async () => {
       try {
         if (running) {
-          await invoke('stop_service');
-          setRunning(false);
+          await handleStop();
           await new Promise(r => setTimeout(r, 1000));
         }
-        await invoke('start_service');
-        setRunning(true);
+        await handleStart();
       } catch (err) {
         addLog('error', `托盘重启服务失败: ${err}`);
       }
     });
     return () => { unlisten.then((fn) => fn()); };
-  }, [running]);
+  }, [running, handleStop, handleStart]);
 
   const getStatusClass = () => {
     if (loading) return "loading";
@@ -151,7 +155,7 @@ function App() {
         progressMsg={progressMsg}
         workspacePath={workspacePath}
         loading={loading}
-        appVersion={APP_VERSION}
+        appVersion={appVersion}
         setupError={setupError}
         onDismissError={clearSetupError}
         onRetry={retrySetup}
@@ -166,7 +170,7 @@ function App() {
   // ===== Main App with Tabs =====
   return (
     <div className="app">
-      <Header running={running} phase={phase} statusClass={getStatusClass()} />
+      <Header running={running} phase={phase} statusClass={getStatusClass()} appVersion={appVersion} />
 
       {/* Tab Navigation (Premium Navbar) */}
       <nav className="tab-nav">
@@ -259,6 +263,7 @@ function App() {
                 }
               }}
               checkingUpdate={checkingUpdate}
+              appVersion={appVersion}
               onCheckUpdate={async () => {
                 setCheckingUpdate(true);
                 try {
@@ -268,14 +273,14 @@ function App() {
                   const rawTag = data.tag_name || '';
                   const isSemver = /^v?\d+\.\d+\.\d+$/.test(rawTag);
                   const latestVersion = rawTag.replace(/^v/, '');
-                  if (isSemver && latestVersion !== APP_VERSION) {
+                  if (isSemver && latestVersion !== appVersion) {
                     setFeedbackModal({
                       title: '发现更新',
-                      msg: `发现新版本 v${latestVersion}！\n当前版本 v${APP_VERSION}`,
+                      msg: `发现新版本 v${latestVersion}！\n当前版本 v${appVersion}`,
                       url: data.html_url || 'https://github.com/ZsTs119/openclaw-launcher/releases',
                     });
                   } else {
-                    setFeedbackModal({ title: '无可用更新', msg: `当前版本 v${APP_VERSION} 已是最新版本` });
+                    setFeedbackModal({ title: '无可用更新', msg: `当前版本 v${appVersion} 已是最新版本` });
                   }
                 } catch {
                   setFeedbackModal({ title: '网络错误', msg: '检查更新失败，请检查网络连接' });

@@ -12,14 +12,15 @@ interface HeaderProps {
     running: boolean;
     phase: string;
     statusClass: string;
+    appVersion: string;
 }
 
-export function Header({ running, phase, statusClass }: HeaderProps) {
+export function Header({ running, phase, statusClass, appVersion }: HeaderProps) {
     return (
         <header className="header">
             <div className="header-left">
                 <span className="header-logo">OpenClaw Launcher</span>
-                <span className="header-version">v0.4.0</span>
+                <span className="header-version">v{appVersion}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {phase === "ready" && (
