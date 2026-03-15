@@ -10,7 +10,7 @@
 
 // ===== App State =====
 export type AppPhase = "checking" | "initializing" | "workspace" | "ready";
-export type TabId = "dashboard" | "models" | "settings";
+export type TabId = "dashboard" | "models" | "agents" | "analytics" | "settings";
 
 // ===== Data Models =====
 export interface LogEntry {
@@ -18,6 +18,28 @@ export interface LogEntry {
     level: string;
     message: string;
     humanized?: string;
+}
+
+export interface AgentInfo {
+    name: string;
+    model: string | null;
+    has_sessions: boolean;
+    is_default: boolean;
+}
+
+export interface AgentDetail {
+    name: string;
+    model: string | null;
+    provider: string | null;
+    system_prompt: string | null;
+    has_sessions: boolean;
+    is_default: boolean;
+}
+
+export interface SkillInfo {
+    name: string;
+    description: string;
+    path: string;
 }
 
 export interface ProviderInfo {

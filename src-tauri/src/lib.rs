@@ -1,6 +1,7 @@
 // Copyright (C) 2026 ZsTs119
 // SPDX-License-Identifier: GPL-3.0-only
 // This file is part of OpenClaw Launcher. See LICENSE for details.
+mod agents;
 mod config;
 mod diagnostics;
 mod download;
@@ -140,6 +141,13 @@ pub fn run() {
             config::reset_config,
             // Diagnostics
             diagnostics::export_diagnostics_zip,
+            // Agent management
+            agents::list_agents,
+            agents::get_agent_detail,
+            agents::create_agent,
+            agents::update_agent,
+            agents::delete_agent,
+            agents::list_skills,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

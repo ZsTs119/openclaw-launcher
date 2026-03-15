@@ -7,7 +7,7 @@ use tauri::Emitter;
 
 /// Get the ACTUAL OpenClaw config directory that the gateway reads: ~/.openclaw/
 /// This is different from crate::paths::get_openclaw_dir() which returns the sandbox path
-fn get_user_openclaw_dir() -> Result<PathBuf, String> {
+pub fn get_user_openclaw_dir() -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
     let dir = home.join(".openclaw");
     std::fs::create_dir_all(&dir).map_err(|e| format!("创建 .openclaw 目录失败: {}", e))?;

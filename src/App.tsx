@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
-import { Activity, SlidersHorizontal, Network } from "lucide-react";
+import { Activity, SlidersHorizontal, Network, Bot, BarChart3 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import "./App.css";
 import qrWechat from "./assets/qr-wechat.jpg";
@@ -20,6 +20,8 @@ import { ApiKeyModal } from "./components/ApiKeyModal";
 import { SetupWizard } from "./components/SetupWizard";
 import { DashboardTab } from "./components/DashboardTab";
 import { ModelsTab } from "./components/ModelsTab";
+import { AgentsTab } from "./components/AgentsTab";
+import { AnalyticsTab } from "./components/AnalyticsTab";
 import { SettingsTab } from "./components/SettingsTab";
 import { ModelSwitchModal } from "./components/ModelSwitchModal";
 import { ConfirmModal } from "./components/ConfirmModal";
@@ -177,6 +179,8 @@ function App() {
         {([
           { id: "dashboard" as TabId, label: "仪表盘", icon: <Activity size={18} strokeWidth={1.5} /> },
           { id: "models" as TabId, label: "AI 引擎", icon: <Network size={18} strokeWidth={1.5} /> },
+          { id: "agents" as TabId, label: "智能体", icon: <Bot size={18} strokeWidth={1.5} /> },
+          { id: "analytics" as TabId, label: "数据统计", icon: <BarChart3 size={18} strokeWidth={1.5} /> },
           { id: "settings" as TabId, label: "设置中心", icon: <SlidersHorizontal size={18} strokeWidth={1.5} /> },
         ]).map((tab) => (
           <button key={tab.id} className={`tab-btn ${activeTab === tab.id ? "active" : ""}`}
@@ -227,6 +231,12 @@ function App() {
               handleSaveConfig={handleSaveConfig}
             />
           )}
+
+          {/* ===== Agents Tab ===== */}
+          {activeTab === "agents" && <AgentsTab />}
+
+          {/* ===== Analytics Tab (Placeholder) ===== */}
+          {activeTab === "analytics" && <AnalyticsTab />}
 
           {/* ===== Settings Tab ===== */}
           {activeTab === "settings" && (
