@@ -35,6 +35,7 @@ export function useConfig({ addLog, running, setRunning }: UseConfigOptions) {
     const [showReinstallModal, setShowReinstallModal] = useState(false);
     const [showModelSwitchModal, setShowModelSwitchModal] = useState(false);
     const [infoModalTitle, setInfoModalTitle] = useState("");
+    const [configVersion, setConfigVersion] = useState(0);
 
     const filteredProviders = providers.filter((p) => p.category === selectedCategory);
 
@@ -71,6 +72,7 @@ export function useConfig({ addLog, running, setRunning }: UseConfigOptions) {
             addLog("success", result);
             setCurrentConfig({ has_api_key: true, provider: selectedProvider, model: selectedModel, base_url: baseUrlInput || null });
             setShowKeyModal(false);
+            setConfigVersion(v => v + 1);
 
             // Auto-restart service if running, so new config takes effect
             if (running) {
@@ -134,6 +136,16 @@ export function useConfig({ addLog, running, setRunning }: UseConfigOptions) {
         setShowReinstallModal(true);
     }, []);
 
+    /** Reset modal form state — call before opening ApiKeyModal */
+    const resetModalState = useCallback(() => {
+        setSelectedCategory("free");
+        setSelectedProvider("");
+        setApiKeyInput("");
+        setBaseUrlInput("");
+        setSelectedModel("");
+        setConfigStatus("");
+    }, []);
+
     return {
         providers,
         selectedCategory, setSelectedCategory,
@@ -158,5 +170,7 @@ export function useConfig({ addLog, running, setRunning }: UseConfigOptions) {
         handleReset,
         confirmReset,
         handleReinstall,
+        configVersion,
+        resetModalState,
     };
 }

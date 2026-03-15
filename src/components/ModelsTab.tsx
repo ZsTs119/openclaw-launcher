@@ -33,11 +33,15 @@ interface ModelsTabProps {
     setConfigStatus: (v: string) => void;
     setShowKeyModal: (v: boolean) => void;
     handleSaveConfig: () => void;
+    configVersion: number;
+    resetModalState: () => void;
 }
 
 export function ModelsTab({
     setShowKeyModal,
     currentConfig,
+    configVersion,
+    resetModalState,
 }: ModelsTabProps) {
     const [savedProviders, setSavedProviders] = useState<SavedProvider[]>([]);
     const [loading, setLoading] = useState(true);
@@ -57,7 +61,12 @@ export function ModelsTab({
         }
     }, []);
 
-    useEffect(() => { loadProviders(); }, [loadProviders]);
+    useEffect(() => { loadProviders(); }, [loadProviders, configVersion]);
+
+    const handleOpenAddModal = () => {
+        resetModalState();
+        setShowKeyModal(true);
+    };
 
     const handleDelete = async (name: string) => {
         setDeleting(true);
@@ -89,7 +98,7 @@ export function ModelsTab({
                     </h2>
                     <p className="page-desc" style={{ margin: "6px 0 0" }}>管理已配置的模型提供商，添加新的 API Key 接入更多模型。</p>
                 </div>
-                <button className="btn-primary" onClick={() => setShowKeyModal(true)}>
+                <button className="btn-primary" onClick={handleOpenAddModal}>
                     <Plus size={14} strokeWidth={2} /> 添加模型商
                 </button>
             </div>
@@ -109,7 +118,7 @@ export function ModelsTab({
                 <div className="agents-empty">
                     暂无已保存的模型商
                     <br />
-                    <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => setShowKeyModal(true)}>
+                    <button className="btn-primary" style={{ marginTop: 16 }} onClick={handleOpenAddModal}>
                         <Plus size={14} strokeWidth={2} /> 添加第一个模型商
                     </button>
                 </div>

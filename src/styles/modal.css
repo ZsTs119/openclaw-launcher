@@ -89,7 +89,7 @@
 }
 
 .modal-providers {
-  max-height: 200px;
+  max-height: 360px;
   overflow-y: auto;
   grid-template-columns: 1fr !important;
 }

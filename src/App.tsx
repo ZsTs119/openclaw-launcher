@@ -67,6 +67,7 @@ function App() {
     infoModalTitle, setInfoModalTitle,
     checkApiKey, handleSaveConfig, handleSetModel, handleOpenRegister,
     handleReset, confirmReset, handleReinstall,
+    configVersion, resetModalState,
   } = useConfig({ addLog, running, setRunning });
 
   const {
@@ -229,6 +230,8 @@ function App() {
               setConfigStatus={setConfigStatus}
               setShowKeyModal={setShowKeyModal}
               handleSaveConfig={handleSaveConfig}
+              configVersion={configVersion}
+              resetModalState={resetModalState}
             />
           )}
 
