@@ -43,12 +43,14 @@ pub fn check_port_available() -> Result<bool, String> {
 /// Global state to hold the running OpenClaw child process
 pub struct ServiceState {
     pub child: Mutex<Option<Child>>,
+    pub port: Mutex<u16>,
 }
 
 impl Default for ServiceState {
     fn default() -> Self {
         Self {
             child: Mutex::new(None),
+            port: Mutex::new(18789),
         }
     }
 }
@@ -235,10 +237,12 @@ pub async fn start_service(
         "message": "✅ OpenClaw 服务已启动！正在监听端口..."
     }));
 
-    // Store the child process
+    // Store the child process and port
     {
         let mut guard = state.child.lock().unwrap();
         *guard = Some(child);
+        let mut port_guard = state.port.lock().unwrap();
+        *port_guard = chosen_port;
     }
 
     Ok("Service started".to_string())

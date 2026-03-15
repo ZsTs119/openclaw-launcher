@@ -50,10 +50,18 @@ pub fn run() {
                             }
                         }
                         "browser" => {
-                            // Open the gateway in default browser
-                            let _ = open::that("http://localhost:18789?token=openclaw-launcher-local");
+                            // Open the gateway in default browser using actual service port
+                            let state = app.state::<service::ServiceState>();
+                            let port = *state.port.lock().unwrap();
+                            let _ = open::that(format!("http://localhost:{}?token=openclaw-launcher-local", port));
                         }
                         "restart" => {
+                            // Show the window first so user sees the restart progress
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.unminimize();
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
                             // Emit restart event to frontend — it has the hooks to stop+start
                             let _ = app.emit("tray-restart-service", ());
                         }
