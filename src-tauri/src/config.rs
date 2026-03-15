@@ -280,7 +280,8 @@ pub fn save_api_config(
     ))
 }
 
-/// Set the default model using serde_json
+/// Set the default model using serde_json.
+/// Also persists custom model IDs into the provider's models array.
 #[tauri::command]
 pub fn set_default_model(
     app: tauri::AppHandle,
@@ -302,7 +303,6 @@ pub fn set_default_model(
     let full_model_id = if model_id.contains('/') {
         model_id.clone()
     } else {
-        // Try to get the first provider name from config
         let first_provider = config.get("models")
             .and_then(|m| m.get("providers"))
             .and_then(|p| p.as_object())
@@ -315,6 +315,14 @@ pub fn set_default_model(
         }
     };
 
+    // Extract provider name and bare model id
+    let parts: Vec<&str> = full_model_id.splitn(2, '/').collect();
+    let (provider_name, bare_model_id) = if parts.len() == 2 {
+        (parts[0], parts[1])
+    } else {
+        ("", full_model_id.as_str())
+    };
+
     // Update agents.defaults.model.primary
     if config.get("agents").is_none() {
         config["agents"] = serde_json::json!({});
@@ -324,10 +332,81 @@ pub fn set_default_model(
     }
     config["agents"]["defaults"]["model"] = serde_json::json!({ "primary": full_model_id });
 
+    // Add custom model to provider's models array if not already present
+    if !provider_name.is_empty() {
+        if let Some(provider_obj) = config
+            .get_mut("models")
+            .and_then(|m| m.get_mut("providers"))
+            .and_then(|p| p.get_mut(provider_name))
+        {
+            let models_arr = provider_obj
+                .get_mut("models")
+                .and_then(|m| m.as_array_mut());
+
+            if let Some(arr) = models_arr {
+                let already_exists = arr.iter().any(|m|
+                    m.get("id").and_then(|id| id.as_str()) == Some(bare_model_id)
+                );
+                if !already_exists {
+                    arr.push(serde_json::json!({
+                        "id": bare_model_id,
+                        "name": bare_model_id,
+                        "reasoning": false,
+                        "input": ["text"],
+                        "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+                        "contextWindow": 128000,
+                        "maxTokens": 8192
+                    }));
+                }
+            }
+        }
+    }
+
+    // Add to agents.defaults.models map
+    if config["agents"]["defaults"].get("models").is_none() {
+        config["agents"]["defaults"]["models"] = serde_json::json!({});
+    }
+    config["agents"]["defaults"]["models"][&full_model_id] = serde_json::json!({});
+
     let output = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("序列化失败: {}", e))?;
     std::fs::write(&config_path, &output)
         .map_err(|e| format!("写入配置失败: {}", e))?;
+
+    // Also update agents/main/agent/models.json
+    let agent_dir = openclaw_dir.join("agents").join("main").join("agent");
+    let models_path = agent_dir.join("models.json");
+    if models_path.exists() {
+        if let Ok(mc) = std::fs::read_to_string(&models_path) {
+            if let Ok(mut agent_models) = serde_json::from_str::<serde_json::Value>(&mc) {
+                if !provider_name.is_empty() {
+                    if let Some(p) = agent_models.get_mut("providers")
+                        .and_then(|p| p.get_mut(provider_name))
+                    {
+                        if let Some(arr) = p.get_mut("models").and_then(|m| m.as_array_mut()) {
+                            let exists = arr.iter().any(|m|
+                                m.get("id").and_then(|id| id.as_str()) == Some(bare_model_id)
+                            );
+                            if !exists {
+                                arr.push(serde_json::json!({
+                                    "id": bare_model_id,
+                                    "name": bare_model_id,
+                                    "reasoning": false,
+                                    "input": ["text"],
+                                    "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+                                    "contextWindow": 128000,
+                                    "maxTokens": 8192
+                                }));
+                            }
+                        }
+                    }
+                }
+                let _ = std::fs::write(&models_path,
+                    serde_json::to_string_pretty(&agent_models).unwrap_or_default()
+                );
+            }
+        }
+    }
 
     let _ = app.emit("config-updated", serde_json::json!({
         "model": full_model_id,

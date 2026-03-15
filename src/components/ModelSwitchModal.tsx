@@ -1,33 +1,63 @@
 // Copyright (C) 2026 ZsTs119
 // SPDX-License-Identifier: GPL-3.0-only
 // This file is part of OpenClaw Launcher. See LICENSE for details.
-import { useState } from "react";
+/**
+ * ModelSwitchModal — Dashboard model switch dialog
+ *
+ * Uses SAVED providers from backend (not built-in catalog) to ensure
+ * complete sync with AI Engine provider cards.
+ */
+
+import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Modal, ModalFooter } from "./ui/Modal";
-import type { ProviderInfo, CurrentConfig } from "../types";
+import type { CurrentConfig, SavedProvider } from "../types";
 import { ModelSelectWithCustom } from "./ModelSelectWithCustom";
 
 interface ModelSwitchModalProps {
     show: boolean;
     onClose: () => void;
-    providers: ProviderInfo[];
     currentConfig: CurrentConfig | null;
     handleSetModel: (modelId: string) => Promise<void>;
+    configVersion: number;
 }
 
 export function ModelSwitchModal({
-    show, onClose, providers, currentConfig, handleSetModel,
+    show, onClose, currentConfig, handleSetModel, configVersion,
 }: ModelSwitchModalProps) {
-    // Track the locally selected model (visual state)
+    const [localSelected, setLocalSelected] = useState("");
+    const [savedProviders, setSavedProviders] = useState<SavedProvider[]>([]);
+
+    // Load saved providers from backend — same source as AI Engine
+    const loadProviders = useCallback(async () => {
+        try {
+            const list = await invoke<SavedProvider[]>("list_saved_providers");
+            setSavedProviders(list);
+        } catch { /* */ }
+    }, []);
+
+    useEffect(() => { loadProviders(); }, [loadProviders, configVersion]);
+
+    // Derive current active model id (bare, without provider prefix)
     const currentModelId = currentConfig?.model?.includes("/")
         ? currentConfig.model.split("/").slice(1).join("/")
         : currentConfig?.model || "";
 
-    const [localSelected, setLocalSelected] = useState(currentModelId);
+    // Reset local selection when modal opens or config changes
+    useEffect(() => {
+        if (show) setLocalSelected(currentModelId);
+    }, [show, currentModelId]);
 
-    const currentProvider = providers.find(p => p.id === currentConfig?.provider);
-    const models = currentProvider?.models || [];
+    // Find current provider from saved providers
+    const currentProvider = savedProviders.find(p => p.name === currentConfig?.provider);
+    // Map SavedModel[] to ModelInfo[] format for ModelSelectWithCustom
+    const models = (currentProvider?.models || []).map(m => ({
+        id: m.id,
+        name: m.name || m.id,
+        provider: currentConfig?.provider || "",
+        is_free: false,
+    }));
 
-    // Reset local state when modal opens
     const effectiveSelected = localSelected || currentModelId;
 
     return (

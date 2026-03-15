@@ -109,6 +109,8 @@ export function useConfig({ addLog, running, setRunning }: UseConfigOptions) {
                 model: modelId,
                 provider: newProvider ?? prev.provider,
             } : prev);
+            // Trigger all consumers to reload (ModelsTab, etc.)
+            setConfigVersion(v => v + 1);
         } catch (err) {
             setConfigStatus(`[!] 切换失败: ${err}`);
         }

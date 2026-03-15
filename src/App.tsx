@@ -342,9 +342,9 @@ function App() {
       <ModelSwitchModal
         show={showModelSwitchModal}
         onClose={() => setShowModelSwitchModal(false)}
-        providers={providers}
         currentConfig={currentConfig}
         handleSetModel={handleSetModel}
+        configVersion={configVersion}
       />
 
       {/* Reset Confirmation Modal */}
