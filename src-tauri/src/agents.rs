@@ -94,36 +94,46 @@ fn workspace_path(name: &str) -> Result<PathBuf, String> {
     }
 }
 
-/// Extract the primary model from an agent's models.json
-fn extract_model_from_dir(agent_path: &PathBuf) -> (Option<String>, Option<String>) {
-    let models_path = agent_path.join("agent").join("models.json");
-    if !models_path.exists() {
-        return (None, None);
-    }
-    let content = match fs::read_to_string(&models_path) {
-        Ok(c) => c,
-        Err(_) => return (None, None),
-    };
-    let json: serde_json::Value = match serde_json::from_str(&content) {
-        Ok(v) => v,
-        Err(_) => return (None, None),
-    };
-
-    let provider = json.get("providers")
-        .and_then(|p| p.as_object())
-        .and_then(|obj| obj.keys().next().map(|k| k.to_string()));
-
-    let model = json.get("providers")
-        .and_then(|p| p.as_object())
-        .and_then(|obj| obj.values().next())
-        .and_then(|p| p.get("models"))
-        .and_then(|m| m.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|m| m.get("id"))
-        .and_then(|id| id.as_str())
+/// Extract model ref (e.g. "bailian/glm-5") for an agent from openclaw.json agents.list[]
+fn extract_model_from_config(config: &serde_json::Value, agent_id: &str) -> (Option<String>, Option<String>) {
+    let model_ref = config.get("agents")
+        .and_then(|a| a.get("list"))
+        .and_then(|l| l.as_array())
+        .and_then(|arr| arr.iter().find(|a| a.get("id").and_then(|id| id.as_str()) == Some(agent_id)))
+        .and_then(|entry| entry.get("model"))
+        .and_then(|m| m.as_str())
         .map(|s| s.to_string());
 
-    (model, provider)
+    match model_ref {
+        Some(ref full_ref) => {
+            let parts: Vec<&str> = full_ref.splitn(2, '/').collect();
+            if parts.len() == 2 {
+                (Some(parts[1].to_string()), Some(parts[0].to_string()))
+            } else {
+                (Some(full_ref.clone()), None)
+            }
+        }
+        None => {
+            // Fall back to agents.defaults.model.primary
+            let default_ref = config.get("agents")
+                .and_then(|a| a.get("defaults"))
+                .and_then(|d| d.get("model"))
+                .and_then(|m| m.get("primary"))
+                .and_then(|p| p.as_str())
+                .map(|s| s.to_string());
+            match default_ref {
+                Some(ref full_ref) => {
+                    let parts: Vec<&str> = full_ref.splitn(2, '/').collect();
+                    if parts.len() == 2 {
+                        (Some(parts[1].to_string()), Some(parts[0].to_string()))
+                    } else {
+                        (Some(full_ref.clone()), None)
+                    }
+                }
+                None => (None, None),
+            }
+        }
+    }
 }
 
 /// Extract system prompt from workspace SOUL.md (the gateway reads this, not agent.json)
@@ -162,61 +172,29 @@ fn is_agent_supervisor(config: &serde_json::Value, agent_id: &str) -> bool {
         .unwrap_or(agent_id == "main") // main defaults to supervisor
 }
 
-/// Write models.json for an agent given a model ref like "provider/model_id"
-fn write_agent_model(agent_dir_path: &PathBuf, model_ref: &str) -> Result<(), String> {
-    let parts: Vec<&str> = model_ref.splitn(2, '/').collect();
-    if parts.len() != 2 {
-        return Err(format!("无效的模型引用格式: {}（需要 provider/model 格式）", model_ref));
+/// Update model field in agents.list[] entry in openclaw.json
+fn update_agent_model_in_config(agent_id: &str, model_ref: &str) -> Result<(), String> {
+    let mut config = read_config()?;
+
+    if let Some(list) = config.get_mut("agents")
+        .and_then(|a| a.get_mut("list"))
+        .and_then(|l| l.as_array_mut())
+    {
+        if let Some(entry) = list.iter_mut().find(|a|
+            a.get("id").and_then(|id| id.as_str()) == Some(agent_id)
+        ) {
+            if model_ref.is_empty() {
+                // Remove per-agent model → falls back to defaults.model.primary
+                if let Some(obj) = entry.as_object_mut() {
+                    obj.remove("model");
+                }
+            } else {
+                entry["model"] = serde_json::Value::String(model_ref.to_string());
+            }
+        }
     }
-    let provider = parts[0];
-    let model_id = parts[1];
 
-    // Read from global config to get the model details
-    let config = read_config()?;
-    let model_info = config.get("models")
-        .and_then(|m| m.get("providers"))
-        .and_then(|p| p.get(provider))
-        .and_then(|prov| prov.get("models"))
-        .and_then(|m| m.as_array())
-        .and_then(|arr| arr.iter().find(|m| m.get("id").and_then(|id| id.as_str()) == Some(model_id)))
-        .cloned();
-
-    let agent_subdir = agent_dir_path.join("agent");
-    fs::create_dir_all(&agent_subdir).map_err(|e| format!("创建目录失败: {}", e))?;
-
-    // Build models.json in the same format as the global config
-    let models_json = if let Some(info) = model_info {
-        serde_json::json!({
-            "providers": {
-                provider: {
-                    "models": [info]
-                }
-            }
-        })
-    } else {
-        // Model not found in global config, write minimal entry
-        serde_json::json!({
-            "providers": {
-                provider: {
-                    "models": [{
-                        "id": model_id,
-                        "name": model_id,
-                        "reasoning": false,
-                        "input": ["text"],
-                        "contextWindow": 128000,
-                        "maxTokens": 8192
-                    }]
-                }
-            }
-        })
-    };
-
-    fs::write(
-        agent_subdir.join("models.json"),
-        serde_json::to_string_pretty(&models_json).unwrap(),
-    ).map_err(|e| format!("写入 models.json 失败: {}", e))?;
-
-    Ok(())
+    write_config(&config)
 }
 
 /// Create bootstrap files in a workspace directory
@@ -241,7 +219,7 @@ fn create_bootstrap_files(workspace: &PathBuf) -> Result<(), String> {
 }
 
 /// Add an agent entry to agents.list[] in openclaw.json
-fn add_to_agents_list(agent_id: &str, workspace: &str, is_supervisor: bool) -> Result<(), String> {
+fn add_to_agents_list(agent_id: &str, workspace: &str, is_supervisor: bool, model: Option<&str>) -> Result<(), String> {
     let mut config = read_config()?;
 
     // Ensure agents.list exists
@@ -267,13 +245,22 @@ fn add_to_agents_list(agent_id: &str, workspace: &str, is_supervisor: bool) -> R
             serde_json::json!(["main"])
         };
 
-        list.push(serde_json::json!({
+        let mut entry = serde_json::json!({
             "id": agent_id,
             "workspace": workspace,
             "subagents": {
                 "allowAgents": allow_agents
             }
-        }));
+        });
+
+        // Set model if specified (otherwise inherits agents.defaults.model.primary)
+        if let Some(model_ref) = model {
+            if !model_ref.is_empty() {
+                entry["model"] = serde_json::Value::String(model_ref.to_string());
+            }
+        }
+
+        list.push(entry);
     }
 
     write_config(&config)
@@ -332,7 +319,7 @@ pub fn list_agents() -> Result<Vec<AgentInfo>, String> {
             continue;
         }
         let name = entry.file_name().to_string_lossy().to_string();
-        let (model, provider) = extract_model_from_dir(&entry.path());
+        let (model, provider) = extract_model_from_config(&config, &name);
         let has_sessions = entry.path().join("sessions").exists();
 
         // Check if the agent's provider still exists in config
@@ -369,7 +356,7 @@ pub fn get_agent_detail(name: String) -> Result<AgentDetail, String> {
     }
 
     let config = read_config()?;
-    let (model, provider) = extract_model_from_dir(&agent_path);
+    let (model, provider) = extract_model_from_config(&config, &name);
     let system_prompt = extract_system_prompt(&name);
     let has_sessions = agent_path.join("sessions").exists();
     let is_supervisor = is_agent_supervisor(&config, &name);
@@ -412,28 +399,21 @@ pub fn create_agent(
     let agent_dir = agent_path.join("agent");
     fs::create_dir_all(&agent_dir).map_err(|e| format!("创建目录失败: {}", e))?;
 
-    // 2. Write models.json if model specified
-    if let Some(ref model_ref) = model {
-        write_agent_model(&agent_path, model_ref)?;
-    }
+    // 2. Create workspace with bootstrap files
+    let ws = workspace_path(&name)?;
+    create_bootstrap_files(&ws)?;
 
     // 3. Write system prompt to workspace SOUL.md (this is what the gateway reads)
     if let Some(prompt) = system_prompt {
-        let ws = workspace_path(&name)?;
-        fs::create_dir_all(&ws).map_err(|e| format!("创建 workspace 失败: {}", e))?;
         fs::write(
             ws.join("SOUL.md"),
             &prompt,
         ).map_err(|e| format!("写入系统提示词失败: {}", e))?;
     }
 
-    // 4. Create workspace with bootstrap files
-    let ws = workspace_path(&name)?;
-    create_bootstrap_files(&ws)?;
-
-    // 5. Sync to openclaw.json agents.list[]
+    // 4. Sync to openclaw.json agents.list[] (with model)
     let supervisor = is_supervisor.unwrap_or(false);
-    add_to_agents_list(&name, &ws.to_string_lossy(), supervisor)?;
+    add_to_agents_list(&name, &ws.to_string_lossy(), supervisor, model.as_deref())?;
 
     Ok(())
 }
@@ -464,9 +444,9 @@ pub fn update_agent(
         ).map_err(|e| format!("写入系统提示词失败: {}", e))?;
     }
 
-    // Update model
+    // Update model in agents.list[] (empty string = inherit default)
     if let Some(ref model_ref) = model {
-        write_agent_model(&agent_path, model_ref)?;
+        update_agent_model_in_config(&name, model_ref)?;
     }
 
     // Update permission

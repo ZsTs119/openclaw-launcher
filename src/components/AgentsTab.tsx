@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
@@ -67,14 +68,27 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
 
     // When service becomes ready and we have a pending chat URL, open it
     useEffect(() => {
-        if (running && servicePort && pendingChatUrl.current) {
-            const url = pendingChatUrl.current;
-            pendingChatUrl.current = null;
-            // Delay to let the browser auto-open from service.rs finish first,
-            // so we don't race with it
-            const timer = setTimeout(() => openUrl(url), 2500);
-            return () => clearTimeout(timer);
-        }
+        if (!pendingChatUrl.current) return;
+
+        const unlisten = listen<{ level: string; message: string }>("service-log", (event) => {
+            const msg = event.payload.message?.toLowerCase() || "";
+            if (
+                pendingChatUrl.current &&
+                (msg.includes("listening") ||
+                    msg.includes("started on") ||
+                    msg.includes("ready on") ||
+                    msg.includes("server is running") ||
+                    msg.includes("server started"))
+            ) {
+                const url = pendingChatUrl.current;
+                pendingChatUrl.current = null;
+                // Small delay so service.rs auto-open finishes first
+                setTimeout(() => openUrl(url), 500);
+                unlisten.then((fn) => fn());
+            }
+        });
+
+        return () => { unlisten.then((fn) => fn()); };
     }, [running, servicePort]);
 
     const resetForm = () => {
@@ -310,8 +324,8 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
                         />
                         <span className="form-hint">小写字母、数字、连字符，1-32 字符</span>
                     </label>
-                    <label className="form-label">
-                        模型
+                    <div className="form-label">
+                        <span className="form-label-text">模型</span>
                         <CustomDropdown
                             options={modelOptions}
                             value={newModel}
@@ -319,7 +333,7 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
                             placeholder="继承默认模型"
                         />
                         <span className="form-hint">从已添加的 AI 引擎中选择模型</span>
-                    </label>
+                    </div>
                     <label className="form-label">
                         人设指令 <span className="form-optional">(可选)</span>
                         <textarea
@@ -366,15 +380,15 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
             {/* Edit Modal */}
             <Modal show={showEdit} onClose={() => setShowEdit(false)} title={`编辑 Agent: ${selectedAgent?.name || ""}`} maxWidth={480}>
                 <div className="modal-form">
-                    <label className="form-label">
-                        模型
+                    <div className="form-label">
+                        <span className="form-label-text">模型</span>
                         <CustomDropdown
                             options={modelOptions}
                             value={newModel}
                             onChange={setNewModel}
                             placeholder="继承默认模型"
                         />
-                    </label>
+                    </div>
                     <label className="form-label">
                         人设指令
                         <textarea
