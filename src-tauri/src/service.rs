@@ -13,6 +13,141 @@ use std::os::windows::process::CommandExt;
 use crate::environment;
 use crate::paths;
 
+/// Pre-build Control UI assets if missing.
+///
+/// On Windows, usernames with spaces (e.g., "C:\Users\chuhan zhou\...") cause
+/// the engine's internal `pnpm ui:build` to fail because Node.js `spawn()` with
+/// `shell: true` mishandles the CWD path. By running the build ourselves via
+/// Rust's `Command` (which doesn't use shell), we bypass this issue.
+///
+/// This is a best-effort operation — if it fails, the gateway will attempt its
+/// own build (which may also fail on space-path machines, but that's no worse
+/// than the current behavior).
+fn ensure_control_ui_built(app: &tauri::AppHandle) {
+    let openclaw_dir = match paths::get_openclaw_dir() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+
+    let ui_index = openclaw_dir.join("dist").join("control-ui").join("index.html");
+    if ui_index.exists() {
+        return; // Already built — skip (most machines hit this path)
+    }
+
+    let ui_dir = openclaw_dir.join("ui");
+    if !ui_dir.join("package.json").exists() {
+        return; // No UI source available
+    }
+
+    let node_bin = match environment::get_node_binary() {
+        Ok(b) => b,
+        Err(_) => return,
+    };
+
+    let _ = app.emit("service-log", serde_json::json!({
+        "level": "info",
+        "message": "Control UI 缺失，正在预构建..."
+    }));
+
+    // Build PATH with sandboxed node
+    let node_dir = node_bin.parent().unwrap().to_path_buf();
+    let sandbox_path = if let Some(current_path) = std::env::var_os("PATH") {
+        let mut paths_vec = std::env::split_paths(&current_path).collect::<Vec<_>>();
+        paths_vec.insert(0, node_dir.clone());
+        std::env::join_paths(paths_vec).unwrap_or_default()
+    } else {
+        std::ffi::OsString::from(&node_dir)
+    };
+
+    // Step 1: Install UI deps via npm (not pnpm — avoids the shell issue)
+    let ui_node_modules = ui_dir.join("node_modules");
+    if !ui_node_modules.join("vite").exists() {
+        if let Ok(npm_bin) = environment::get_npm_binary() {
+            let mut npm_cmd = std::process::Command::new(&node_bin);
+            npm_cmd.arg(&npm_bin)
+                .arg("install")
+                .arg("--prefix")
+                .arg(&ui_dir)
+                .env("PATH", &sandbox_path)
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped());
+
+            #[cfg(target_os = "windows")]
+            npm_cmd.creation_flags(0x08000000);
+
+            match npm_cmd.output() {
+                Ok(output) if output.status.success() => {
+                    let _ = app.emit("service-log", serde_json::json!({
+                        "level": "info",
+                        "message": "Control UI 依赖安装完成"
+                    }));
+                }
+                Ok(output) => {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    let _ = app.emit("service-log", serde_json::json!({
+                        "level": "warn",
+                        "message": format!("Control UI 依赖安装失败: {}", stderr.chars().take(200).collect::<String>())
+                    }));
+                    return;
+                }
+                Err(e) => {
+                    let _ = app.emit("service-log", serde_json::json!({
+                        "level": "warn",
+                        "message": format!("Control UI 依赖安装异常: {}", e)
+                    }));
+                    return;
+                }
+            }
+        } else {
+            return; // No npm available
+        }
+    }
+
+    // Step 2: Run vite build directly via node (no shell, no pnpm)
+    // vite's entry point: ui/node_modules/vite/bin/vite.js
+    let vite_js = ui_dir.join("node_modules").join("vite").join("bin").join("vite.js");
+    if !vite_js.exists() {
+        let _ = app.emit("service-log", serde_json::json!({
+            "level": "warn",
+            "message": "vite.js 未找到，跳过 Control UI 构建"
+        }));
+        return;
+    }
+
+    let mut build_cmd = std::process::Command::new(&node_bin);
+    build_cmd.arg(&vite_js)
+        .arg("build")
+        .current_dir(&ui_dir)
+        .env("PATH", &sandbox_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    build_cmd.creation_flags(0x08000000);
+
+    match build_cmd.output() {
+        Ok(output) if output.status.success() => {
+            let _ = app.emit("service-log", serde_json::json!({
+                "level": "success",
+                "message": "[OK] Control UI 预构建成功"
+            }));
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let _ = app.emit("service-log", serde_json::json!({
+                "level": "warn",
+                "message": format!("Control UI 构建失败: {}", stderr.chars().take(200).collect::<String>())
+            }));
+        }
+        Err(e) => {
+            let _ = app.emit("service-log", serde_json::json!({
+                "level": "warn",
+                "message": format!("Control UI 构建异常: {}", e)
+            }));
+        }
+    }
+}
+
 /// Check if a port is truly available by:
 /// 1. Trying to bind to it (standard OS check)
 /// 2. Trying to connect to it (catches WSL2 port forwarding — WSL binds 0.0.0.0
@@ -84,6 +219,9 @@ pub async fn start_service(
     app: tauri::AppHandle,
     state: tauri::State<'_, ServiceState>,
 ) -> Result<String, String> {
+    // Pre-build Control UI if missing (fixes Windows space-in-path issue)
+    ensure_control_ui_built(&app);
+
     // Check if already running
     {
         let mut guard = state.child.lock().unwrap();
