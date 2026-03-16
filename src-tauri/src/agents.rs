@@ -126,17 +126,19 @@ fn extract_model_from_dir(agent_path: &PathBuf) -> (Option<String>, Option<Strin
     (model, provider)
 }
 
-/// Extract system prompt from agent.json
-fn extract_system_prompt(agent_path: &PathBuf) -> Option<String> {
-    let agent_json = agent_path.join("agent").join("agent.json");
-    if !agent_json.exists() {
+/// Extract system prompt from workspace SOUL.md (the gateway reads this, not agent.json)
+fn extract_system_prompt(agent_name: &str) -> Option<String> {
+    let ws = workspace_path(agent_name).ok()?;
+    let soul_path = ws.join("SOUL.md");
+    if !soul_path.exists() {
         return None;
     }
-    let content = fs::read_to_string(&agent_json).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-    json.get("systemPrompt")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
+    let content = fs::read_to_string(&soul_path).ok()?;
+    let trimmed = content.trim();
+    if trimmed.is_empty() || trimmed == "# Persona\n\n<!-- Define the agent's personality, tone, and boundaries -->" {
+        return None;
+    }
+    Some(content)
 }
 
 /// Check if a provider exists in the openclaw.json config
@@ -368,7 +370,7 @@ pub fn get_agent_detail(name: String) -> Result<AgentDetail, String> {
 
     let config = read_config()?;
     let (model, provider) = extract_model_from_dir(&agent_path);
-    let system_prompt = extract_system_prompt(&agent_path);
+    let system_prompt = extract_system_prompt(&name);
     let has_sessions = agent_path.join("sessions").exists();
     let is_supervisor = is_agent_supervisor(&config, &name);
 
@@ -415,15 +417,14 @@ pub fn create_agent(
         write_agent_model(&agent_path, model_ref)?;
     }
 
-    // 3. Write agent.json with system prompt if provided
+    // 3. Write system prompt to workspace SOUL.md (this is what the gateway reads)
     if let Some(prompt) = system_prompt {
-        let agent_json = serde_json::json!({
-            "systemPrompt": prompt
-        });
+        let ws = workspace_path(&name)?;
+        fs::create_dir_all(&ws).map_err(|e| format!("创建 workspace 失败: {}", e))?;
         fs::write(
-            agent_dir.join("agent.json"),
-            serde_json::to_string_pretty(&agent_json).unwrap(),
-        ).map_err(|e| format!("写入配置失败: {}", e))?;
+            ws.join("SOUL.md"),
+            &prompt,
+        ).map_err(|e| format!("写入系统提示词失败: {}", e))?;
     }
 
     // 4. Create workspace with bootstrap files
@@ -453,22 +454,14 @@ pub fn update_agent(
 
     let agent_dir = agent_path.join("agent");
 
-    // Update system prompt
+    // Update system prompt → write to workspace SOUL.md
     if let Some(prompt) = system_prompt {
-        let agent_json_path = agent_dir.join("agent.json");
-        let mut json: serde_json::Value = if agent_json_path.exists() {
-            let content = fs::read_to_string(&agent_json_path)
-                .map_err(|e| format!("读取配置失败: {}", e))?;
-            serde_json::from_str(&content).unwrap_or(serde_json::json!({}))
-        } else {
-            serde_json::json!({})
-        };
-
-        json["systemPrompt"] = serde_json::Value::String(prompt);
+        let ws = workspace_path(&name)?;
+        fs::create_dir_all(&ws).map_err(|e| format!("创建 workspace 失败: {}", e))?;
         fs::write(
-            &agent_json_path,
-            serde_json::to_string_pretty(&json).unwrap(),
-        ).map_err(|e| format!("写入配置失败: {}", e))?;
+            ws.join("SOUL.md"),
+            &prompt,
+        ).map_err(|e| format!("写入系统提示词失败: {}", e))?;
     }
 
     // Update model

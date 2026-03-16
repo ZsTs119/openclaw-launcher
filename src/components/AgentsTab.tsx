@@ -10,11 +10,11 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 import { Modal } from "./ui/Modal";
+import { CustomDropdown } from "./ui/CustomDropdown";
 import type { AgentInfo, AgentDetail, SkillInfo, AvailableModel } from "../types";
 import "../styles/agents.css";
 
@@ -42,7 +42,7 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
     const [formError, setFormError] = useState("");
     const [saving, setSaving] = useState(false);
 
-    // Pending chat URL: open browser once service is ready
+    // Pending chat: open browser once service becomes ready
     const pendingChatUrl = useRef<string | null>(null);
 
     const loadData = useCallback(async () => {
@@ -65,24 +65,17 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
 
     useEffect(() => { loadData(); }, [loadData]);
 
-    // Listen for service-ready signal to open pending chat URL
+    // When service becomes ready and we have a pending chat URL, open it
     useEffect(() => {
-        const unlisten = listen<{ level: string; message: string }>("service-log", (event) => {
-            const msg = event.payload.message?.toLowerCase() || "";
-            if (
-                pendingChatUrl.current &&
-                (msg.includes("listening") ||
-                    msg.includes("started on") ||
-                    msg.includes("ready on") ||
-                    msg.includes("server is running") ||
-                    msg.includes("server started"))
-            ) {
-                openUrl(pendingChatUrl.current);
-                pendingChatUrl.current = null;
-            }
-        });
-        return () => { unlisten.then((fn) => fn()); };
-    }, []);
+        if (running && servicePort && pendingChatUrl.current) {
+            const url = pendingChatUrl.current;
+            pendingChatUrl.current = null;
+            // Delay to let the browser auto-open from service.rs finish first,
+            // so we don't race with it
+            const timer = setTimeout(() => openUrl(url), 2500);
+            return () => clearTimeout(timer);
+        }
+    }, [running, servicePort]);
 
     const resetForm = () => {
         setNewName("");
@@ -122,7 +115,6 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
             setSelectedAgent(detail);
             setNewPrompt(detail.system_prompt || "");
             setNewSupervisor(detail.is_supervisor);
-            // Build full_ref from provider + model
             if (detail.provider && detail.model) {
                 setNewModel(`${detail.provider}/${detail.model}`);
             } else {
@@ -176,14 +168,22 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
         const url = `http://localhost:${port}/chat?session=agent:${agentName}:main`;
 
         if (running && servicePort) {
-            // Service already running — just open browser
             openUrl(url);
         } else {
-            // Service not running — start it, open browser when ready
             pendingChatUrl.current = url;
             await handleStart();
         }
     };
+
+    // Build dropdown options
+    const modelOptions = [
+        { value: "", label: "继承默认模型" },
+        ...availableModels.map((m) => ({
+            value: m.full_ref,
+            label: m.model_name,
+            sublabel: m.provider,
+        })),
+    ];
 
     return (
         <motion.div
@@ -312,29 +312,24 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
                     </label>
                     <label className="form-label">
                         模型
-                        <select
-                            className="form-input form-select"
+                        <CustomDropdown
+                            options={modelOptions}
                             value={newModel}
-                            onChange={(e) => setNewModel(e.target.value)}
-                        >
-                            <option value="">继承默认模型</option>
-                            {availableModels.map((m) => (
-                                <option key={m.full_ref} value={m.full_ref}>
-                                    {m.model_name} ({m.provider})
-                                </option>
-                            ))}
-                        </select>
+                            onChange={setNewModel}
+                            placeholder="继承默认模型"
+                        />
                         <span className="form-hint">从已添加的 AI 引擎中选择模型</span>
                     </label>
                     <label className="form-label">
-                        系统提示词 <span className="form-optional">(可选)</span>
+                        人设指令 <span className="form-optional">(可选)</span>
                         <textarea
                             className="form-textarea"
                             value={newPrompt}
                             onChange={(e) => setNewPrompt(e.target.value)}
-                            placeholder="自定义 Agent 行为的系统提示词..."
+                            placeholder="定义 Agent 的性格、语气和行为规则..."
                             rows={4}
                         />
+                        <span className="form-hint">写入 workspace 的 SOUL.md，控制 Agent 人设和边界</span>
                     </label>
                     <label className="form-label form-toggle-label">
                         <span>权限级别</span>
@@ -373,28 +368,23 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
                 <div className="modal-form">
                     <label className="form-label">
                         模型
-                        <select
-                            className="form-input form-select"
+                        <CustomDropdown
+                            options={modelOptions}
                             value={newModel}
-                            onChange={(e) => setNewModel(e.target.value)}
-                        >
-                            <option value="">继承默认模型</option>
-                            {availableModels.map((m) => (
-                                <option key={m.full_ref} value={m.full_ref}>
-                                    {m.model_name} ({m.provider})
-                                </option>
-                            ))}
-                        </select>
+                            onChange={setNewModel}
+                            placeholder="继承默认模型"
+                        />
                     </label>
                     <label className="form-label">
-                        系统提示词
+                        人设指令
                         <textarea
                             className="form-textarea"
                             value={newPrompt}
                             onChange={(e) => setNewPrompt(e.target.value)}
-                            placeholder="自定义 Agent 行为的系统提示词..."
+                            placeholder="定义 Agent 的性格、语气和行为规则..."
                             rows={6}
                         />
+                        <span className="form-hint">写入 SOUL.md — 每次对话开始时注入到 Agent 上下文</span>
                     </label>
                     <label className="form-label form-toggle-label">
                         <span>权限级别</span>
