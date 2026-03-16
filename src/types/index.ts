@@ -25,6 +25,7 @@ export interface AgentInfo {
     model: string | null;
     has_sessions: boolean;
     is_default: boolean;
+    model_valid: boolean;
 }
 
 export interface AgentDetail {
@@ -34,6 +35,14 @@ export interface AgentDetail {
     system_prompt: string | null;
     has_sessions: boolean;
     is_default: boolean;
+    is_supervisor: boolean;
+}
+
+export interface AvailableModel {
+    provider: string;
+    model_id: string;
+    model_name: string;
+    full_ref: string;
 }
 
 export interface SkillInfo {
