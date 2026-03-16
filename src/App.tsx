@@ -244,7 +244,7 @@ function App() {
           )}
 
           {/* ===== Agents Tab ===== */}
-          {activeTab === "agents" && <AgentsTab servicePort={servicePort} />}
+          {activeTab === "agents" && <AgentsTab servicePort={servicePort} running={running} handleStart={handleStart} />}
 
           {/* ===== Analytics Tab (Placeholder) ===== */}
           {activeTab === "analytics" && <AnalyticsTab />}

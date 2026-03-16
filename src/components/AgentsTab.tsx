@@ -8,8 +8,9 @@
  * Shows agent cards with model selection, permission control, and chat buttons.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
@@ -19,9 +20,11 @@ import "../styles/agents.css";
 
 interface AgentsTabProps {
     servicePort: number | null;
+    running: boolean;
+    handleStart: () => Promise<void>;
 }
 
-export function AgentsTab({ servicePort }: AgentsTabProps) {
+export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps) {
     const [agents, setAgents] = useState<AgentInfo[]>([]);
     const [skills, setSkills] = useState<SkillInfo[]>([]);
     const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
@@ -38,6 +41,9 @@ export function AgentsTab({ servicePort }: AgentsTabProps) {
     const [newSupervisor, setNewSupervisor] = useState(false);
     const [formError, setFormError] = useState("");
     const [saving, setSaving] = useState(false);
+
+    // Pending chat URL: open browser once service is ready
+    const pendingChatUrl = useRef<string | null>(null);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -58,6 +64,25 @@ export function AgentsTab({ servicePort }: AgentsTabProps) {
     }, []);
 
     useEffect(() => { loadData(); }, [loadData]);
+
+    // Listen for service-ready signal to open pending chat URL
+    useEffect(() => {
+        const unlisten = listen<{ level: string; message: string }>("service-log", (event) => {
+            const msg = event.payload.message?.toLowerCase() || "";
+            if (
+                pendingChatUrl.current &&
+                (msg.includes("listening") ||
+                    msg.includes("started on") ||
+                    msg.includes("ready on") ||
+                    msg.includes("server is running") ||
+                    msg.includes("server started"))
+            ) {
+                openUrl(pendingChatUrl.current);
+                pendingChatUrl.current = null;
+            }
+        });
+        return () => { unlisten.then((fn) => fn()); };
+    }, []);
 
     const resetForm = () => {
         setNewName("");
@@ -146,10 +171,18 @@ export function AgentsTab({ servicePort }: AgentsTabProps) {
         }
     };
 
-    const handleChat = (agentName: string) => {
-        if (!servicePort) return;
-        const url = `http://localhost:${servicePort}/chat?session=agent:${agentName}:main`;
-        openUrl(url);
+    const handleChat = async (agentName: string) => {
+        const port = servicePort || 18789;
+        const url = `http://localhost:${port}/chat?session=agent:${agentName}:main`;
+
+        if (running && servicePort) {
+            // Service already running — just open browser
+            openUrl(url);
+        } else {
+            // Service not running — start it, open browser when ready
+            pendingChatUrl.current = url;
+            await handleStart();
+        }
     };
 
     return (
@@ -212,7 +245,6 @@ export function AgentsTab({ servicePort }: AgentsTabProps) {
                                     className="btn-ghost btn-chat"
                                     onClick={() => handleChat(agent.name)}
                                     title="对话"
-                                    disabled={!servicePort}
                                 >
                                     <MessageCircle size={14} strokeWidth={1.5} /> 对话
                                 </button>
