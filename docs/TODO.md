@@ -142,12 +142,14 @@
 > **三端验收**：所有 V3 改动必须在 Windows / Linux / macOS 三端验证通过。
 > **UI 规范**：遵循现有深色主题配色 (`--bg-*`, `--accent-*`)、Lucide 图标体系、`framer-motion` 动画。
 
-### 🔔 Phase 7: System Tray + 启动更新检查 → `v0.5.0`
+### 🔔 Phase 7: System Tray + 启动更新检查 + 一键重置 → `v0.5.0`
 - [ ] System Tray 托盘图标 + 右键菜单（打开面板/浏览器/重启/退出）
 - [ ] 关闭窗口 → 最小化到托盘，服务不中断
 - [ ] 托盘图标动态状态（运行中 / 已停止）
-- [ ] 启动自动检查更新（GitHub API → 弹窗 → "前往下载"）
-- [ ] 断网/无更新时静默忽略
+- [x] 启动自动检查更新（GitHub API → 弹窗 → "前往下载"）✅
+- [x] 断网/无更新时静默忽略 ✅
+- [x] 一键重置：合并「重新安装」+「恢复出厂设置」，5秒倒计时确认 ✅
+- [x] 一键重置：删除引擎目录 + 用户数据目录 + npm 全局包 → 重走完整安装流程 ✅
 
 ### 🤖 Phase 8: 智能体 + AI 引擎增强 → `v0.6.0`
 
@@ -158,21 +160,21 @@
 - [ ] ApiKeyModal 高度优化：默认展示 3 选项无需滚动
 
 #### 8.2 Agent 管理增强
-- [x] Agent 卡片网格基础展示
-- [ ] 创建 Agent：名称 + 模型下拉 + 系统提示词
-- [ ] 编辑 Agent：切换模型 + 修改提示词 + 权限
-- [ ] 删除 Agent → 同步清理 openclaw.json + workspace
-- [ ] 权限控制：subagents.allowAgents 配置
-- [ ] openclaw.json agents.list 同步
+- [x] Agent 卡片网格基础展示 ✅
+- [x] 创建 Agent：名称 + 模型下拉 + 系统提示词 ✅
+- [x] 编辑 Agent：切换模型 + 修改提示词 + 权限 ✅
+- [x] 删除 Agent → 同步清理 openclaw.json + workspace ✅
+- [x] 权限控制：subagents.allowAgents 配置 ✅
+- [x] openclaw.json agents.list 同步 ✅
 
 #### 8.3 Agent 对话 + 会话
-- [ ] 卡片「💬 对话」按钮 → 浏览器打开 agent 会话
+- [x] 卡片「💬 对话」按钮 → 浏览器打开 agent 会话 ✅
 - [ ] 会话历史列表展示 + 点击恢复
 
 #### 8.4 其它
-- [x] 数据统计 Tab 占位页面
+- [x] 数据统计 Tab 占位页面 ✅
 - [ ] 数据统计页滚动条修复
-- [x] 已安装技能列表展示
+- [x] 已安装技能列表展示 ✅
 
 ### 📱 Phase 9: 平台接入配置 → `v0.7.0`
 - [ ] config.rs 重构: 字符串拼接 → `serde_json::Value` 结构化读写
