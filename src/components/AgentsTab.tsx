@@ -43,8 +43,8 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
     const [formError, setFormError] = useState("");
     const [saving, setSaving] = useState(false);
 
-    // Pending chat: open browser once service becomes ready
-    const pendingChatUrl = useRef<string | null>(null);
+    // Pending chat: store agent name, open browser once service becomes ready with correct port
+    const pendingChatAgent = useRef<string | null>(null);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -66,23 +66,25 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
 
     useEffect(() => { loadData(); }, [loadData]);
 
-    // When service becomes ready and we have a pending chat URL, open it
+    // When service becomes ready and we have a pending chat agent, open browser with correct port
     useEffect(() => {
-        if (!pendingChatUrl.current) return;
+        if (!pendingChatAgent.current) return;
 
         const unlisten = listen<{ level: string; message: string }>("service-log", (event) => {
             const msg = event.payload.message?.toLowerCase() || "";
             if (
-                pendingChatUrl.current &&
+                pendingChatAgent.current &&
                 (msg.includes("listening") ||
                     msg.includes("started on") ||
                     msg.includes("ready on") ||
                     msg.includes("server is running") ||
                     msg.includes("server started"))
             ) {
-                const url = pendingChatUrl.current;
-                pendingChatUrl.current = null;
-                // Small delay so service.rs auto-open finishes first
+                const agentName = pendingChatAgent.current;
+                pendingChatAgent.current = null;
+                // Use servicePort which is now set by the running service
+                const port = servicePort || 18789;
+                const url = `http://localhost:${port}/chat?session=agent:${agentName}:main`;
                 setTimeout(() => openUrl(url), 500);
                 unlisten.then((fn) => fn());
             }
@@ -175,13 +177,12 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
     };
 
     const handleChat = async (agentName: string) => {
-        const port = servicePort || 18789;
-        const url = `http://localhost:${port}/chat?session=agent:${agentName}:main`;
-
         if (running && servicePort) {
+            const url = `http://localhost:${servicePort}/chat?session=agent:${agentName}:main`;
             openUrl(url);
         } else {
-            pendingChatUrl.current = url;
+            // Store agent name — URL will be constructed with real port when service is ready
+            pendingChatAgent.current = agentName;
             await handleStart();
         }
     };
