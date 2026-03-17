@@ -315,18 +315,9 @@ pub async fn start_service(
                 if let Ok(line) = line {
                     let level = classify_log_level(&line);
 
-                    // Auto-open browser when service is ready
+                    // Detect service ready — just emit a log, frontend handles browser opening
                     if !browser_opened && is_service_ready_signal(&line) {
                         browser_opened = true;
-                        let app_browser = app_out.clone();
-                        std::thread::spawn(move || {
-                            std::thread::sleep(std::time::Duration::from_secs(2));
-                            let _ = app_browser.emit("service-log", serde_json::json!({
-                                "level": "success",
-                                "message": "🌐 正在打开浏览器..."
-                            }));
-                            let _ = open::that(format!("http://localhost:{}?token=openclaw-launcher-local", open_port));
-                        });
                     }
 
                     let _ = app_out.emit("service-log", serde_json::json!({

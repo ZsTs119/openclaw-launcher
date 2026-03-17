@@ -86,14 +86,10 @@ fn write_config(value: &serde_json::Value) -> Result<(), String> {
         .map_err(|e| format!("写入 openclaw.json 失败: {}", e))
 }
 
-/// Get workspace path for an agent (main uses "workspace", others use "workspace-<name>")
+/// Get workspace path for an agent (always uses "workspace-{name}" pattern, matching gateway)
 fn workspace_path(name: &str) -> Result<PathBuf, String> {
     let base = get_user_openclaw_dir()?;
-    if name == "main" {
-        Ok(base.join("workspace"))
-    } else {
-        Ok(base.join(format!("workspace-{}", name)))
-    }
+    Ok(base.join(format!("workspace-{}", name)))
 }
 
 /// Extract model ref (e.g. "bailian/glm-5") for an agent from openclaw.json agents.list[]
