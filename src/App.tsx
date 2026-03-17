@@ -66,7 +66,7 @@ function App() {
     showModelSwitchModal, setShowModelSwitchModal,
     infoModalTitle, setInfoModalTitle,
     checkApiKey, handleSaveConfig, handleSetModel, handleOpenRegister,
-    handleFactoryReset, confirmFactoryReset,
+    handleFactoryReset,
     configVersion, resetModalState,
   } = useConfig({ addLog, running, setRunning, setStartingUp: (v) => startingUpRef.current(v) });
 
@@ -85,9 +85,9 @@ function App() {
     uptime, servicePort,
     reinstalling, repairing,
     handleStart, handleStop,
-    confirmReinstall, handleRepairConnection,
+    confirmReinstall, confirmFactoryReset, handleRepairConnection,
   } = useService({
-    addLog, checkApiKey, setRepairToast,
+    addLog, checkApiKey, setRepairToast, setShowResetModal,
     running, setRunning,
     setPhase, setProgress, setProgressMsg,
   });

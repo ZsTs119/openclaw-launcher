@@ -146,28 +146,6 @@ export function useConfig({ addLog, running, setRunning, setStartingUp }: UseCon
         setShowResetModal(true);
     }, []);
 
-    const confirmFactoryReset = useCallback(async () => {
-        setShowResetModal(false);
-        try {
-            // Frontend should stop service first if running
-            if (running) {
-                try {
-                    await invoke("stop_service");
-                    setRunning(false);
-                } catch { /* service might not be running */ }
-                await new Promise(r => setTimeout(r, 1500));
-            }
-            addLog("info", "正在执行一键重置...");
-            const result = await invoke<string>("factory_reset");
-            addLog("success", result);
-            // Reload the entire app to trigger checkEnvironment() on mount
-            // This will detect OpenClaw is gone and start the install flow
-            setTimeout(() => window.location.reload(), 800);
-        } catch (err) {
-            addLog("error", `一键重置失败: ${err}`);
-        }
-    }, [addLog, running, setRunning]);
-
     /** Reset modal form state — call before opening ApiKeyModal */
     const resetModalState = useCallback(() => {
         setSelectedCategory("free");
@@ -199,7 +177,6 @@ export function useConfig({ addLog, running, setRunning, setStartingUp }: UseCon
         handleSetModel,
         handleOpenRegister,
         handleFactoryReset,
-        confirmFactoryReset,
         configVersion,
         resetModalState,
     };

@@ -19,16 +19,17 @@ interface UseServiceOptions {
     addLog: (level: string, message: string) => void;
     checkApiKey: () => Promise<void>;
     setRepairToast: (show: boolean) => void;
+    setShowResetModal: (show: boolean) => void;
     running: boolean;
     setRunning: (r: boolean) => void;
-    // From useSetup — needed for reinstall to reset phase
+    // From useSetup — needed for reinstall/reset to control phase
     setPhase: (phase: AppPhase) => void;
     setProgress: (p: number) => void;
     setProgressMsg: (m: string) => void;
 }
 
 export function useService({
-    addLog, checkApiKey, setRepairToast,
+    addLog, checkApiKey, setRepairToast, setShowResetModal,
     running, setRunning,
     setPhase, setProgress, setProgressMsg,
 }: UseServiceOptions) {
@@ -161,6 +162,36 @@ export function useService({
         }
     }, [addLog, running, servicePort, setRepairToast]);
 
+    const confirmFactoryReset = useCallback(async () => {
+        setShowResetModal(false);
+        setReinstalling(true);
+        // 1. Stop service if running
+        if (running) {
+            try {
+                addLog("info", "正在停止服务...");
+                await invoke("stop_service");
+                setRunning(false);
+            } catch { /* service might not be running */ }
+            await new Promise(r => setTimeout(r, 1000));
+        }
+        // 2. Switch to install UI immediately
+        setPhase("initializing");
+        setProgress(0);
+        setProgressMsg("正在执行一键重置...");
+        // 3. Call backend: npm uninstall + delete data + setup_openclaw
+        try {
+            await invoke("factory_reset");
+            setPhase("ready");
+            addLog("success", "一键重置完成，环境已重新安装！");
+            await checkApiKey();
+        } catch (err) {
+            addLog("error", `一键重置失败: ${err}`);
+            setProgressMsg(`[!] 一键重置失败: ${err}`);
+        } finally {
+            setReinstalling(false);
+        }
+    }, [addLog, checkApiKey, running, setRunning, setShowResetModal, setPhase, setProgress, setProgressMsg]);
+
     return {
         loading, startingUp, setStartingUp,
         uptime, servicePort,
@@ -168,6 +199,7 @@ export function useService({
         handleStart,
         handleStop,
         confirmReinstall,
+        confirmFactoryReset,
         handleRepairConnection,
     };
 }

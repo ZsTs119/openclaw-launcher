@@ -416,38 +416,17 @@ pub fn set_default_model(
 }
 
 
-/// Factory reset — uninstall openclaw, delete all data, return to fresh state
-/// NOTE: Frontend should stop the service first before calling this
+/// Factory reset — uninstall openclaw, delete all data, re-run full setup
+/// Frontend should: stopService → setPhase("initializing") → call this
 #[tauri::command]
 pub async fn factory_reset(app: tauri::AppHandle) -> Result<String, String> {
     let openclaw_dir = get_user_openclaw_dir()?;
 
-    // 1. Kill any remaining openclaw gateway processes (not the launcher itself!)
-    let _ = app.emit("service-log", serde_json::json!({
-        "level": "info",
-        "message": "正在清理进程..."
-    }));
-    if cfg!(target_os = "windows") {
-        // Kill node processes running openclaw, but not the launcher
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "node.exe"])
-            .output();
-    } else {
-        // Kill only the openclaw node gateway process, not our launcher
-        let own_pid = std::process::id();
-        let _ = std::process::Command::new("bash")
-            .args(["-c", &format!(
-                "pgrep -f 'node.*openclaw' | grep -v {} | xargs -r kill -9 2>/dev/null",
-                own_pid
-            )])
-            .output();
-    }
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-    // 2. npm uninstall openclaw globally
-    let _ = app.emit("service-log", serde_json::json!({
-        "level": "info",
-        "message": "正在卸载 OpenClaw..."
+    // 1. npm uninstall openclaw globally
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "stage": "cleanup",
+        "message": "正在卸载 OpenClaw...",
+        "percent": 5
     }));
 
     let npm_cmd = if cfg!(target_os = "windows") { "npm.cmd" } else { "npm" };
@@ -455,10 +434,11 @@ pub async fn factory_reset(app: tauri::AppHandle) -> Result<String, String> {
         .args(["uninstall", "-g", "@anthropic-ai/openclaw"])
         .output();
 
-    // 3. Delete entire ~/.openclaw/ directory
-    let _ = app.emit("service-log", serde_json::json!({
-        "level": "info",
-        "message": "正在删除所有数据..."
+    // 2. Delete entire ~/.openclaw/ directory (config, workspace, sessions, agents, etc.)
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "stage": "cleanup",
+        "message": "正在删除所有数据和配置...",
+        "percent": 15
     }));
 
     if openclaw_dir.exists() {
@@ -466,12 +446,12 @@ pub async fn factory_reset(app: tauri::AppHandle) -> Result<String, String> {
             .map_err(|e| format!("删除 OpenClaw 数据目录失败: {}", e))?;
     }
 
-    // 4. Emit config-updated to reset UI state
-    let _ = app.emit("config-updated", serde_json::json!({
-        "provider": serde_json::Value::Null,
-        "hasKey": false,
-        "model": serde_json::Value::Null,
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "stage": "cleanup",
+        "message": "清理完成，开始重新安装...",
+        "percent": 20
     }));
 
-    Ok("已完成一键重置，即将重新启动安装流程...".to_string())
+    // 3. Re-run full setup pipeline (npm install + openclaw setup)
+    crate::setup::setup_openclaw(app).await
 }
