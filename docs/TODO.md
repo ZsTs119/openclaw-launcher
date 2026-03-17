@@ -153,11 +153,11 @@
 
 ### 🤖 Phase 8: 智能体 + AI 引擎增强 → `v0.6.0`
 
-#### 8.1 AI 引擎改版 — 多 Provider 管理
-- [x] 5-Tab 导航扩展（仪表盘 / AI 引擎 / 智能体 / 数据统计 / 设置）
-- [ ] AI 引擎页改版：已保存 Provider 卡片列表
-- [ ] 添加 / 编辑 / 删除 Provider
-- [ ] ApiKeyModal 高度优化：默认展示 3 选项无需滚动
+#### 8.1 AI 引擎改版 — 多 Provider 管理 ✅
+- [x] 5-Tab 导航扩展（仪表盘 / AI 引擎 / 智能体 / 数据统计 / 设置）✅
+- [x] AI 引擎页改版：已保存 Provider 卡片列表 ✅
+- [x] 添加 / 编辑 / 删除 Provider ✅
+- [x] ApiKeyModal 高度优化：默认展示 3 选项无需滚动 ✅
 
 #### 8.2 Agent 管理增强
 - [x] Agent 卡片网格基础展示 ✅
