@@ -160,8 +160,9 @@ export function useConfig({ addLog, running, setRunning, setStartingUp }: UseCon
             addLog("info", "正在执行一键重置...");
             const result = await invoke<string>("factory_reset");
             addLog("success", result);
-            // Reload to return to fresh install flow
-            setTimeout(() => window.location.reload(), 1000);
+            // Reload the entire app to trigger checkEnvironment() on mount
+            // This will detect OpenClaw is gone and start the install flow
+            setTimeout(() => window.location.reload(), 800);
         } catch (err) {
             addLog("error", `一键重置失败: ${err}`);
         }

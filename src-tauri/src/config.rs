@@ -422,18 +422,24 @@ pub fn set_default_model(
 pub async fn factory_reset(app: tauri::AppHandle) -> Result<String, String> {
     let openclaw_dir = get_user_openclaw_dir()?;
 
-    // 1. Kill any remaining openclaw processes (belt + suspenders)
+    // 1. Kill any remaining openclaw gateway processes (not the launcher itself!)
     let _ = app.emit("service-log", serde_json::json!({
         "level": "info",
         "message": "正在清理进程..."
     }));
     if cfg!(target_os = "windows") {
+        // Kill node processes running openclaw, but not the launcher
         let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "openclaw.exe"])
+            .args(["/F", "/IM", "node.exe"])
             .output();
     } else {
-        let _ = std::process::Command::new("pkill")
-            .args(["-f", "openclaw"])
+        // Kill only the openclaw node gateway process, not our launcher
+        let own_pid = std::process::id();
+        let _ = std::process::Command::new("bash")
+            .args(["-c", &format!(
+                "pgrep -f 'node.*openclaw' | grep -v {} | xargs -r kill -9 2>/dev/null",
+                own_pid
+            )])
             .output();
     }
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
