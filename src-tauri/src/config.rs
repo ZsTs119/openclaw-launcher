@@ -416,28 +416,56 @@ pub fn set_default_model(
 }
 
 
-/// Reset config — delete openclaw.json and auth to simulate fresh install
+/// Factory reset — uninstall openclaw, delete all data, return to fresh state
+/// NOTE: Frontend should stop the service first before calling this
 #[tauri::command]
-pub fn reset_config(app: tauri::AppHandle) -> Result<String, String> {
+pub async fn factory_reset(app: tauri::AppHandle) -> Result<String, String> {
     let openclaw_dir = get_user_openclaw_dir()?;
-    let config_path = openclaw_dir.join("openclaw.json");
 
-    if config_path.exists() {
-        std::fs::remove_file(&config_path)
-            .map_err(|e| format!("删除配置失败: {}", e))?;
+    // 1. Kill any remaining openclaw processes (belt + suspenders)
+    let _ = app.emit("service-log", serde_json::json!({
+        "level": "info",
+        "message": "正在清理进程..."
+    }));
+    if cfg!(target_os = "windows") {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "openclaw.exe"])
+            .output();
+    } else {
+        let _ = std::process::Command::new("pkill")
+            .args(["-f", "openclaw"])
+            .output();
+    }
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    // 2. npm uninstall openclaw globally
+    let _ = app.emit("service-log", serde_json::json!({
+        "level": "info",
+        "message": "正在卸载 OpenClaw..."
+    }));
+
+    let npm_cmd = if cfg!(target_os = "windows") { "npm.cmd" } else { "npm" };
+    let _ = std::process::Command::new(npm_cmd)
+        .args(["uninstall", "-g", "@anthropic-ai/openclaw"])
+        .output();
+
+    // 3. Delete entire ~/.openclaw/ directory
+    let _ = app.emit("service-log", serde_json::json!({
+        "level": "info",
+        "message": "正在删除所有数据..."
+    }));
+
+    if openclaw_dir.exists() {
+        std::fs::remove_dir_all(&openclaw_dir)
+            .map_err(|e| format!("删除 OpenClaw 数据目录失败: {}", e))?;
     }
 
-    // Also remove agent models.json
-    let models_path = openclaw_dir.join("agents").join("main").join("agent").join("models.json");
-    if models_path.exists() {
-        let _ = std::fs::remove_file(&models_path);
-    }
-
+    // 4. Emit config-updated to reset UI state
     let _ = app.emit("config-updated", serde_json::json!({
         "provider": serde_json::Value::Null,
         "hasKey": false,
         "model": serde_json::Value::Null,
     }));
 
-    Ok("✅ 配置已重置，请重新配置 API Key".to_string())
+    Ok("已完成一键重置，即将重新启动安装流程...".to_string())
 }

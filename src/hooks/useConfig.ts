@@ -33,7 +33,6 @@ export function useConfig({ addLog, running, setRunning, setStartingUp }: UseCon
     // Modal state
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [showResetModal, setShowResetModal] = useState(false);
-    const [showReinstallModal, setShowReinstallModal] = useState(false);
     const [showModelSwitchModal, setShowModelSwitchModal] = useState(false);
     const [infoModalTitle, setInfoModalTitle] = useState("");
     const [configVersion, setConfigVersion] = useState(0);
@@ -143,30 +142,30 @@ export function useConfig({ addLog, running, setRunning, setStartingUp }: UseCon
         try { await invoke("open_provider_register", { providerId }); } catch { /* */ }
     }, []);
 
-    const handleReset = useCallback(() => {
+    const handleFactoryReset = useCallback(() => {
         setShowResetModal(true);
     }, []);
 
-    const confirmReset = useCallback(async () => {
+    const confirmFactoryReset = useCallback(async () => {
         setShowResetModal(false);
         try {
-            const result = await invoke<string>("reset_config");
-            setCurrentConfig({ has_api_key: false, provider: null, model: null, base_url: null });
-            setApiKeyInput("");
-            setSelectedProvider("");
-            setSelectedModel("");
-            setBaseUrlInput("");
-            setConfigStatus("");
+            // Frontend should stop service first if running
+            if (running) {
+                try {
+                    await invoke("stop_service");
+                    setRunning(false);
+                } catch { /* service might not be running */ }
+                await new Promise(r => setTimeout(r, 1500));
+            }
+            addLog("info", "正在执行一键重置...");
+            const result = await invoke<string>("factory_reset");
             addLog("success", result);
-            setShowKeyModal(true);
+            // Reload to return to fresh install flow
+            setTimeout(() => window.location.reload(), 1000);
         } catch (err) {
-            addLog("error", `重置失败: ${err}`);
+            addLog("error", `一键重置失败: ${err}`);
         }
-    }, [addLog]);
-
-    const handleReinstall = useCallback(() => {
-        setShowReinstallModal(true);
-    }, []);
+    }, [addLog, running, setRunning]);
 
     /** Reset modal form state — call before opening ApiKeyModal */
     const resetModalState = useCallback(() => {
@@ -191,7 +190,6 @@ export function useConfig({ addLog, running, setRunning, setStartingUp }: UseCon
         // Modals
         showKeyModal, setShowKeyModal,
         showResetModal, setShowResetModal,
-        showReinstallModal, setShowReinstallModal,
         showModelSwitchModal, setShowModelSwitchModal,
         infoModalTitle, setInfoModalTitle,
         // Actions
@@ -199,9 +197,8 @@ export function useConfig({ addLog, running, setRunning, setStartingUp }: UseCon
         handleSaveConfig,
         handleSetModel,
         handleOpenRegister,
-        handleReset,
-        confirmReset,
-        handleReinstall,
+        handleFactoryReset,
+        confirmFactoryReset,
         configVersion,
         resetModalState,
     };

@@ -19,7 +19,6 @@ interface UseServiceOptions {
     addLog: (level: string, message: string) => void;
     checkApiKey: () => Promise<void>;
     setRepairToast: (show: boolean) => void;
-    setShowReinstallModal: (show: boolean) => void;
     running: boolean;
     setRunning: (r: boolean) => void;
     // From useSetup — needed for reinstall to reset phase
@@ -29,7 +28,7 @@ interface UseServiceOptions {
 }
 
 export function useService({
-    addLog, checkApiKey, setRepairToast, setShowReinstallModal,
+    addLog, checkApiKey, setRepairToast,
     running, setRunning,
     setPhase, setProgress, setProgressMsg,
 }: UseServiceOptions) {
@@ -123,7 +122,6 @@ export function useService({
     }, [addLog]);
 
     const confirmReinstall = useCallback(async () => {
-        setShowReinstallModal(false);
         setReinstalling(true);
         setPhase("initializing");
         setProgress(0);
@@ -139,7 +137,7 @@ export function useService({
         } finally {
             setReinstalling(false);
         }
-    }, [addLog, checkApiKey, setShowReinstallModal, setPhase, setProgress, setProgressMsg]);
+    }, [addLog, checkApiKey, setPhase, setProgress, setProgressMsg]);
 
     const handleRepairConnection = useCallback(async () => {
         setRepairing(true);

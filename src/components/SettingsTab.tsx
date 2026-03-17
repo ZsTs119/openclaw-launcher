@@ -21,7 +21,7 @@ interface SettingsTabProps {
     handleSwitchWorkspace: () => void;
     handleReinstall: () => void;
     handleRepairConnection: () => void;
-    handleReset: () => void;
+    handleFactoryReset: () => void;
     setShowKeyModal: (v: boolean) => void;
     setInfoModalTitle: (v: string) => void;
     onExportDiagnostics: () => void;
@@ -35,7 +35,7 @@ export function SettingsTab({
     workspacePath, servicePort, currentConfig,
     reinstalling, repairing,
     logs, logRef,
-    handleSwitchWorkspace, handleReinstall, handleRepairConnection, handleReset,
+    handleSwitchWorkspace, handleReinstall, handleRepairConnection, handleFactoryReset,
     setShowKeyModal, setInfoModalTitle,
     onExportDiagnostics,
     onCheckUpdate,
@@ -124,12 +124,12 @@ export function SettingsTab({
 
                             <div className="setting-item setting-danger" style={{ marginTop: 16 }}>
                                 <div className="setting-left">
-                                    <div className="setting-label" style={{ color: 'var(--accent-red)' }}>恢复出厂设置</div>
+                                    <div className="setting-label" style={{ color: 'var(--accent-red)' }}>一键重置</div>
                                     <div className="setting-value" style={{ fontSize: 12 }}>
-                                        抹除 openclaw.json 与 API Key 等敏感信息，回到纯净状态
+                                        删除 OpenClaw 程序、所有配置和数据，恢复到全新安装状态
                                     </div>
                                 </div>
-                                <button className="btn-danger" onClick={handleReset}><Trash2 size={14} strokeWidth={1.5} style={{ verticalAlign: 'middle', marginRight: 4 }} />擦除数据</button>
+                                <button className="btn-danger" onClick={handleFactoryReset}><Trash2 size={14} strokeWidth={1.5} style={{ verticalAlign: 'middle', marginRight: 4 }} />一键重置</button>
                             </div>
                         </div>
                     )}
@@ -193,6 +193,6 @@ export function SettingsTab({
                     )}
                 </div>
             </div>
-        </motion.div>
+        </motion.div >
     );
 }

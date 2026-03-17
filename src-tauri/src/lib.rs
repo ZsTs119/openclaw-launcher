@@ -139,7 +139,7 @@ pub fn run() {
             config::migrate_gateway_config,
             config::save_api_config,
             config::set_default_model,
-            config::reset_config,
+            config::factory_reset,
             // Diagnostics
             diagnostics::export_diagnostics_zip,
             // Agent management

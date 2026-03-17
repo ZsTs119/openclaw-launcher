@@ -63,11 +63,10 @@ function App() {
     configSaving, setConfigStatus,
     currentConfig, filteredProviders,
     showKeyModal, setShowKeyModal, showResetModal, setShowResetModal,
-    showReinstallModal, setShowReinstallModal,
     showModelSwitchModal, setShowModelSwitchModal,
     infoModalTitle, setInfoModalTitle,
     checkApiKey, handleSaveConfig, handleSetModel, handleOpenRegister,
-    handleReset, confirmReset, handleReinstall,
+    handleFactoryReset, confirmFactoryReset,
     configVersion, resetModalState,
   } = useConfig({ addLog, running, setRunning, setStartingUp: (v) => startingUpRef.current(v) });
 
@@ -88,7 +87,7 @@ function App() {
     handleStart, handleStop,
     confirmReinstall, handleRepairConnection,
   } = useService({
-    addLog, checkApiKey, setRepairToast, setShowReinstallModal,
+    addLog, checkApiKey, setRepairToast,
     running, setRunning,
     setPhase, setProgress, setProgressMsg,
   });
@@ -264,9 +263,9 @@ function App() {
 
               logRef={logRef}
               handleSwitchWorkspace={handleSwitchWorkspace}
-              handleReinstall={handleReinstall}
+              handleReinstall={() => confirmReinstall()}
               handleRepairConnection={handleRepairConnection}
-              handleReset={handleReset}
+              handleFactoryReset={handleFactoryReset}
               setShowKeyModal={setShowKeyModal}
               setInfoModalTitle={setInfoModalTitle}
               onExportDiagnostics={async () => {
@@ -354,44 +353,25 @@ function App() {
         configVersion={configVersion}
       />
 
-      {/* Reset Confirmation Modal */}
+      {/* Factory Reset Confirmation Modal — 5s countdown */}
       <ConfirmModal
         show={showResetModal}
-        title="重置配置"
+        title="一键重置"
         onCancel={() => setShowResetModal(false)}
-        onConfirm={confirmReset}
+        onConfirm={confirmFactoryReset}
         confirmLabel="确认重置"
+        countdown={5}
       >
-        <p style={{ marginBottom: 12 }}>仅重置 API Key 和模型配置（openclaw.json 中的 models/agents 部分）。</p>
-        <p style={{ color: "var(--text-secondary)", marginBottom: 4 }}>不会删除：</p>
-        <ul style={{ paddingLeft: 20, marginBottom: 12, color: "var(--text-secondary)" }}>
-          <li>对话历史和记忆</li>
-          <li>Agent 技能和书签</li>
-          <li>工作区文件</li>
-        </ul>
+        <p style={{ marginBottom: 12, fontWeight: 500, color: "var(--accent-red)" }}>❗ 此操作不可撤销！</p>
+        <p style={{ marginBottom: 12 }}>将删除 OpenClaw 程序、所有配置、工作区和聊天记录，恢复到全新安装状态。</p>
         <p style={{ color: "var(--accent-red)", marginBottom: 4 }}>将清除：</p>
-        <ul style={{ paddingLeft: 20, color: "var(--text-secondary)" }}>
-          <li>API Key 配置</li>
-          <li>模型选择和默认模型</li>
-        </ul>
-      </ConfirmModal>
-
-      {/* Reinstall Confirmation Modal */}
-      <ConfirmModal
-        show={showReinstallModal}
-        title="重新安装运行环境"
-        onCancel={() => setShowReinstallModal(false)}
-        onConfirm={confirmReinstall}
-        confirmLabel="确认重新安装"
-      >
-        <p style={{ marginBottom: 12 }}>这将删除 node_modules 并重新下载所有依赖，可能需要几分钟。</p>
-        <p style={{ color: "var(--text-secondary)", marginBottom: 4 }}>适用于：</p>
         <ul style={{ paddingLeft: 20, marginBottom: 12, color: "var(--text-secondary)" }}>
-          <li>安装过程出错</li>
-          <li>环境损坏或依赖缺失</li>
-          <li>版本升级后不兼容</li>
+          <li>OpenClaw 程序（npm 全局包）</li>
+          <li>API Key 和模型配置</li>
+          <li>所有 Agent 和工作区数据</li>
+          <li>对话历史和会话记录</li>
         </ul>
-        <p style={{ color: "var(--text-secondary)", fontSize: 12 }}>根据网络情况，可能需要 3-10 分钟</p>
+        <p style={{ color: "var(--text-secondary)", fontSize: 12 }}>重置后将自动重新进入安装流程</p>
       </ConfirmModal>
 
       {/* Startup Overlay — shown while service is starting up */}
