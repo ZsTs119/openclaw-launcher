@@ -10,7 +10,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
@@ -66,31 +65,13 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
 
     useEffect(() => { loadData(); }, [loadData]);
 
-    // When service becomes ready and we have a pending chat agent, open browser with correct port
+    // When service becomes ready (running + port known) and we have a pending agent, open browser
     useEffect(() => {
-        if (!pendingChatAgent.current) return;
-
-        const unlisten = listen<{ level: string; message: string }>("service-log", (event) => {
-            const msg = event.payload.message?.toLowerCase() || "";
-            if (
-                pendingChatAgent.current &&
-                (msg.includes("listening") ||
-                    msg.includes("started on") ||
-                    msg.includes("ready on") ||
-                    msg.includes("server is running") ||
-                    msg.includes("server started"))
-            ) {
-                const agentName = pendingChatAgent.current;
-                pendingChatAgent.current = null;
-                // Use servicePort which is now set by the running service
-                const port = servicePort || 18789;
-                const url = `http://localhost:${port}/chat?session=agent:${agentName}:main`;
-                setTimeout(() => openUrl(url), 500);
-                unlisten.then((fn) => fn());
-            }
-        });
-
-        return () => { unlisten.then((fn) => fn()); };
+        if (!pendingChatAgent.current || !running || !servicePort) return;
+        const agentName = pendingChatAgent.current;
+        pendingChatAgent.current = null;
+        const url = `http://localhost:${servicePort}/chat?session=agent:${agentName}:main`;
+        setTimeout(() => openUrl(url), 500);
     }, [running, servicePort]);
 
     const resetForm = () => {
