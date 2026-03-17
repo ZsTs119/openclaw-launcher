@@ -129,11 +129,8 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
             setSelectedAgent(detail);
             setNewPrompt(detail.system_prompt || "");
             setNewSupervisor(detail.is_supervisor);
-            if (detail.provider && detail.model) {
-                setNewModel(`${detail.provider}/${detail.model}`);
-            } else {
-                setNewModel("");
-            }
+            // Use model_ref (raw "provider/model_id") for dropdown pre-selection
+            setNewModel(detail.model_ref || "");
             setShowEdit(true);
         } catch (err) {
             console.error(err);
@@ -273,6 +270,7 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
                                                 name: agent.name,
                                                 model: agent.model,
                                                 provider: null,
+                                                model_ref: null,
                                                 system_prompt: null,
                                                 has_sessions: agent.has_sessions,
                                                 is_default: agent.is_default,

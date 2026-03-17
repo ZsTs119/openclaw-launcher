@@ -32,6 +32,8 @@ export interface AgentDetail {
     name: string;
     model: string | null;
     provider: string | null;
+    /** Raw model ref (e.g. "bailian/glm-5") for config round-trip */
+    model_ref: string | null;
     system_prompt: string | null;
     has_sessions: boolean;
     is_default: boolean;

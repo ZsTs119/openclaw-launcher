@@ -26,6 +26,8 @@ pub struct AgentDetail {
     pub name: String,
     pub model: Option<String>,
     pub provider: Option<String>,
+    /// Raw model ref (e.g. "bailian/glm-5") for config round-trip
+    pub model_ref: Option<String>,
     pub system_prompt: Option<String>,
     pub has_sessions: bool,
     pub is_default: bool,
@@ -95,44 +97,47 @@ fn workspace_path(name: &str) -> Result<PathBuf, String> {
 }
 
 /// Extract model ref (e.g. "bailian/glm-5") for an agent from openclaw.json agents.list[]
+/// Returns (display_name, provider) — display_name is human-readable from models.providers
 fn extract_model_from_config(config: &serde_json::Value, agent_id: &str) -> (Option<String>, Option<String>) {
-    let model_ref = config.get("agents")
+    // Get the full model ref from agents.list[] or fall back to defaults
+    let full_ref = config.get("agents")
         .and_then(|a| a.get("list"))
         .and_then(|l| l.as_array())
         .and_then(|arr| arr.iter().find(|a| a.get("id").and_then(|id| id.as_str()) == Some(agent_id)))
         .and_then(|entry| entry.get("model"))
         .and_then(|m| m.as_str())
-        .map(|s| s.to_string());
-
-    match model_ref {
-        Some(ref full_ref) => {
-            let parts: Vec<&str> = full_ref.splitn(2, '/').collect();
-            if parts.len() == 2 {
-                (Some(parts[1].to_string()), Some(parts[0].to_string()))
-            } else {
-                (Some(full_ref.clone()), None)
-            }
-        }
-        None => {
-            // Fall back to agents.defaults.model.primary
-            let default_ref = config.get("agents")
+        .or_else(|| {
+            config.get("agents")
                 .and_then(|a| a.get("defaults"))
                 .and_then(|d| d.get("model"))
                 .and_then(|m| m.get("primary"))
                 .and_then(|p| p.as_str())
-                .map(|s| s.to_string());
-            match default_ref {
-                Some(ref full_ref) => {
-                    let parts: Vec<&str> = full_ref.splitn(2, '/').collect();
-                    if parts.len() == 2 {
-                        (Some(parts[1].to_string()), Some(parts[0].to_string()))
-                    } else {
-                        (Some(full_ref.clone()), None)
-                    }
-                }
-                None => (None, None),
+        })
+        .map(|s| s.to_string());
+
+    match full_ref {
+        Some(ref fr) => {
+            let parts: Vec<&str> = fr.splitn(2, '/').collect();
+            if parts.len() == 2 {
+                let provider = parts[0];
+                let model_id = parts[1];
+                // Look up human-readable name from models.providers
+                let display_name = config.get("models")
+                    .and_then(|m| m.get("providers"))
+                    .and_then(|p| p.get(provider))
+                    .and_then(|prov| prov.get("models"))
+                    .and_then(|m| m.as_array())
+                    .and_then(|arr| arr.iter().find(|m| m.get("id").and_then(|id| id.as_str()) == Some(model_id)))
+                    .and_then(|m| m.get("name"))
+                    .and_then(|n| n.as_str())
+                    .unwrap_or(model_id)
+                    .to_string();
+                (Some(display_name), Some(provider.to_string()))
+            } else {
+                (Some(fr.clone()), None)
             }
         }
+        None => (None, None),
     }
 }
 
@@ -173,24 +178,47 @@ fn is_agent_supervisor(config: &serde_json::Value, agent_id: &str) -> bool {
 }
 
 /// Update model field in agents.list[] entry in openclaw.json
+/// If agent is not in agents.list[], auto-add it
 fn update_agent_model_in_config(agent_id: &str, model_ref: &str) -> Result<(), String> {
     let mut config = read_config()?;
 
-    if let Some(list) = config.get_mut("agents")
-        .and_then(|a| a.get_mut("list"))
-        .and_then(|l| l.as_array_mut())
-    {
-        if let Some(entry) = list.iter_mut().find(|a|
-            a.get("id").and_then(|id| id.as_str()) == Some(agent_id)
-        ) {
+    // Ensure agents.list exists
+    if config.get("agents").is_none() {
+        config["agents"] = serde_json::json!({});
+    }
+    if config["agents"].get("list").is_none() {
+        config["agents"]["list"] = serde_json::json!([]);
+    }
+
+    let list = config["agents"]["list"].as_array_mut()
+        .ok_or("agents.list 不是数组")?;
+
+    let entry = list.iter_mut().find(|a|
+        a.get("id").and_then(|id| id.as_str()) == Some(agent_id)
+    );
+
+    match entry {
+        Some(entry) => {
             if model_ref.is_empty() {
-                // Remove per-agent model → falls back to defaults.model.primary
                 if let Some(obj) = entry.as_object_mut() {
                     obj.remove("model");
                 }
             } else {
                 entry["model"] = serde_json::Value::String(model_ref.to_string());
             }
+        }
+        None => {
+            // Agent not in list — auto-add (handles agents created before config sync)
+            let ws = workspace_path(agent_id)?;
+            let mut new_entry = serde_json::json!({
+                "id": agent_id,
+                "workspace": ws.to_string_lossy(),
+                "subagents": { "allowAgents": ["main"] }
+            });
+            if !model_ref.is_empty() {
+                new_entry["model"] = serde_json::Value::String(model_ref.to_string());
+            }
+            list.push(new_entry);
         }
     }
 
@@ -357,6 +385,14 @@ pub fn get_agent_detail(name: String) -> Result<AgentDetail, String> {
 
     let config = read_config()?;
     let (model, provider) = extract_model_from_config(&config, &name);
+    // Get raw model ref for edit form dropdown pre-selection
+    let model_ref = config.get("agents")
+        .and_then(|a| a.get("list"))
+        .and_then(|l| l.as_array())
+        .and_then(|arr| arr.iter().find(|a| a.get("id").and_then(|id| id.as_str()) == Some(&name)))
+        .and_then(|entry| entry.get("model"))
+        .and_then(|m| m.as_str())
+        .map(|s| s.to_string());
     let system_prompt = extract_system_prompt(&name);
     let has_sessions = agent_path.join("sessions").exists();
     let is_supervisor = is_agent_supervisor(&config, &name);
@@ -366,6 +402,7 @@ pub fn get_agent_detail(name: String) -> Result<AgentDetail, String> {
         name,
         model,
         provider,
+        model_ref,
         system_prompt,
         has_sessions,
         is_supervisor,
