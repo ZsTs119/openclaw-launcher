@@ -40,6 +40,10 @@ export function useService({
     const [repairing, setRepairing] = useState(false);
     const [startingUp, setStartingUp] = useState(false);
     const uptimeRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // One-shot callback fired when service becomes truly ready (listening on port)
+    const onServiceReadyRef = useRef<((port: number) => void) | null>(null);
+    // Keep latest servicePort in a ref for access inside stale closures (listen callback)
+    const servicePortRef = useRef(servicePort);
 
     // Uptime counter
     useEffect(() => {
@@ -67,7 +71,10 @@ export function useService({
 
         const unlistenPort = listen<{ port: number }>(
             "service-port",
-            (event) => setServicePort(event.payload.port)
+            (event) => {
+                setServicePort(event.payload.port);
+                servicePortRef.current = event.payload.port;
+            }
         );
 
         // Listen for service-ready signal to dismiss startup overlay
@@ -84,6 +91,12 @@ export function useService({
                     msg.includes("正在打开浏览器")
                 ) {
                     setStartingUp(false);
+                    // Fire one-shot onServiceReady callback (e.g. open agent chat browser)
+                    if (onServiceReadyRef.current) {
+                        const cb = onServiceReadyRef.current;
+                        onServiceReadyRef.current = null;
+                        cb(servicePortRef.current);
+                    }
                 }
             }
         );
@@ -201,5 +214,6 @@ export function useService({
         confirmReinstall,
         confirmFactoryReset,
         handleRepairConnection,
+        onServiceReadyRef,
     };
 }

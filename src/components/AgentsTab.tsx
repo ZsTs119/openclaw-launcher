@@ -8,7 +8,7 @@
  * Shows agent cards with model selection, permission control, and chat buttons.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle } from "lucide-react";
@@ -22,9 +22,10 @@ interface AgentsTabProps {
     servicePort: number | null;
     running: boolean;
     handleStart: () => Promise<void>;
+    onServiceReadyRef: React.MutableRefObject<((port: number) => void) | null>;
 }
 
-export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps) {
+export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef }: AgentsTabProps) {
     const [agents, setAgents] = useState<AgentInfo[]>([]);
     const [skills, setSkills] = useState<SkillInfo[]>([]);
     const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
@@ -41,9 +42,6 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
     const [newSupervisor, setNewSupervisor] = useState(false);
     const [formError, setFormError] = useState("");
     const [saving, setSaving] = useState(false);
-
-    // Pending chat: store agent name, open browser once service becomes ready with correct port
-    const pendingChatAgent = useRef<string | null>(null);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -64,15 +62,6 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
     }, []);
 
     useEffect(() => { loadData(); }, [loadData]);
-
-    // When service becomes ready (running + port known) and we have a pending agent, open browser
-    useEffect(() => {
-        if (!pendingChatAgent.current || !running || !servicePort) return;
-        const agentName = pendingChatAgent.current;
-        pendingChatAgent.current = null;
-        const url = `http://localhost:${servicePort}/chat?session=agent:${agentName}:main`;
-        setTimeout(() => openUrl(url), 500);
-    }, [running, servicePort]);
 
     const resetForm = () => {
         setNewName("");
@@ -162,8 +151,11 @@ export function AgentsTab({ servicePort, running, handleStart }: AgentsTabProps)
             const url = `http://localhost:${servicePort}/chat?session=agent:${agentName}:main`;
             openUrl(url);
         } else {
-            // Store agent name — URL will be constructed with real port when service is ready
-            pendingChatAgent.current = agentName;
+            // Register one-shot callback: fires when service is truly ready with correct port
+            onServiceReadyRef.current = (port: number) => {
+                const url = `http://localhost:${port}/chat?session=agent:${agentName}:main`;
+                openUrl(url);
+            };
             await handleStart();
         }
     };

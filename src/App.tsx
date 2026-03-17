@@ -86,6 +86,7 @@ function App() {
     reinstalling, repairing,
     handleStart, handleStop,
     confirmReinstall, confirmFactoryReset, handleRepairConnection,
+    onServiceReadyRef,
   } = useService({
     addLog, checkApiKey, setRepairToast, setShowResetModal,
     running, setRunning,
@@ -243,7 +244,7 @@ function App() {
           )}
 
           {/* ===== Agents Tab ===== */}
-          {activeTab === "agents" && <AgentsTab servicePort={servicePort} running={running} handleStart={handleStart} />}
+          {activeTab === "agents" && <AgentsTab servicePort={servicePort} running={running} handleStart={handleStart} onServiceReadyRef={onServiceReadyRef} />}
 
           {/* ===== Analytics Tab (Placeholder) ===== */}
           {activeTab === "analytics" && <AnalyticsTab />}
