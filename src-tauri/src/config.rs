@@ -416,11 +416,12 @@ pub fn set_default_model(
 }
 
 
-/// Factory reset — uninstall openclaw, delete all data, re-run full setup
+/// Factory reset — delete ALL data (engine + user config), re-run full setup from zero
 /// Frontend should: stopService → setPhase("initializing") → call this
 #[tauri::command]
 pub async fn factory_reset(app: tauri::AppHandle) -> Result<String, String> {
-    let openclaw_dir = get_user_openclaw_dir()?;
+    let user_dir = get_user_openclaw_dir()?;         // ~/.openclaw/ (config, agents, sessions)
+    let engine_dir = crate::paths::get_openclaw_dir()?; // sandbox/openclaw/ (source, node_modules)
 
     // 1. npm uninstall openclaw globally
     let _ = app.emit("setup-progress", serde_json::json!({
@@ -434,24 +435,36 @@ pub async fn factory_reset(app: tauri::AppHandle) -> Result<String, String> {
         .args(["uninstall", "-g", "@anthropic-ai/openclaw"])
         .output();
 
-    // 2. Delete entire ~/.openclaw/ directory (config, workspace, sessions, agents, etc.)
+    // 2. Delete engine source + node_modules (sandbox/openclaw/)
     let _ = app.emit("setup-progress", serde_json::json!({
         "stage": "cleanup",
-        "message": "正在删除所有数据和配置...",
+        "message": "正在删除引擎和依赖...",
+        "percent": 10
+    }));
+
+    if engine_dir.exists() {
+        std::fs::remove_dir_all(&engine_dir)
+            .map_err(|e| format!("删除引擎目录失败: {}", e))?;
+    }
+
+    // 3. Delete user data + config (~/.openclaw/)
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "stage": "cleanup",
+        "message": "正在删除配置和用户数据...",
         "percent": 15
     }));
 
-    if openclaw_dir.exists() {
-        std::fs::remove_dir_all(&openclaw_dir)
-            .map_err(|e| format!("删除 OpenClaw 数据目录失败: {}", e))?;
+    if user_dir.exists() {
+        std::fs::remove_dir_all(&user_dir)
+            .map_err(|e| format!("删除用户数据目录失败: {}", e))?;
     }
 
     let _ = app.emit("setup-progress", serde_json::json!({
         "stage": "cleanup",
-        "message": "清理完成，开始重新安装...",
+        "message": "清理完成，开始重新下载并安装...",
         "percent": 20
     }));
 
-    // 3. Re-run full setup pipeline (npm install + openclaw setup)
+    // 4. Re-run full setup pipeline (download + npm install + config inject)
     crate::setup::setup_openclaw(app).await
 }
