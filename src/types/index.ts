@@ -28,6 +28,15 @@ export interface AgentInfo {
     model_valid: boolean;
 }
 
+export interface SessionInfo {
+    id: string;
+    name: string;
+    timestamp: string;
+    message_count: number;
+    preview: string[];
+    is_renamed: boolean;
+}
+
 export interface AgentDetail {
     name: string;
     model: string | null;

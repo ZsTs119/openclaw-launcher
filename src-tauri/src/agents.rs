@@ -3,6 +3,7 @@
 // This file is part of OpenClaw Launcher. See LICENSE for details.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -344,7 +345,7 @@ pub fn list_agents() -> Result<Vec<AgentInfo>, String> {
         }
         let name = entry.file_name().to_string_lossy().to_string();
         let (model, provider) = extract_model_from_config(&config, &name);
-        let has_sessions = entry.path().join("sessions").exists();
+        let has_sessions = count_active_sessions(&entry.path().join("sessions")) > 0;
 
         // Check if the agent's provider still exists in config
         let model_valid = provider.as_ref()
@@ -390,7 +391,7 @@ pub fn get_agent_detail(name: String) -> Result<AgentDetail, String> {
         .and_then(|m| m.as_str())
         .map(|s| s.to_string());
     let system_prompt = extract_system_prompt(&name);
-    let has_sessions = agent_path.join("sessions").exists();
+    let has_sessions = count_active_sessions(&agent_path.join("sessions")) > 0;
     let is_supervisor = is_agent_supervisor(&config, &name);
 
     Ok(AgentDetail {
@@ -616,6 +617,246 @@ pub fn list_skills() -> Result<Vec<SkillInfo>, String> {
 
     skills.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(skills)
+}
+
+// ─────────── Session History ───────────
+
+/// Info for a single chat session
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SessionInfo {
+    pub id: String,
+    pub name: String,
+    pub timestamp: String,
+    pub message_count: usize,
+    pub preview: Vec<String>,
+    pub is_renamed: bool,
+}
+
+/// Count active .jsonl sessions in a directory
+fn count_active_sessions(sessions_dir: &std::path::Path) -> usize {
+    if !sessions_dir.exists() {
+        return 0;
+    }
+    fs::read_dir(sessions_dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|e| {
+                    let name = e.file_name().to_string_lossy().to_string();
+                    name.ends_with(".jsonl")
+                        && !name.contains(".deleted")
+                        && !name.contains(".reset")
+                        && !name.contains(".bak")
+                })
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+/// Load session_meta.json for custom names
+fn load_session_meta(agent_name: &str) -> HashMap<String, String> {
+    let base = match get_user_openclaw_dir() {
+        Ok(b) => b,
+        Err(_) => return HashMap::new(),
+    };
+    let meta_path = base.join("agents").join(agent_name).join("sessions").join("session_meta.json");
+    if let Ok(data) = fs::read_to_string(&meta_path) {
+        serde_json::from_str(&data).unwrap_or_default()
+    } else {
+        HashMap::new()
+    }
+}
+
+/// Save session_meta.json
+fn save_session_meta(agent_name: &str, meta: &HashMap<String, String>) -> Result<(), String> {
+    let base = get_user_openclaw_dir()?;
+    let meta_path = base.join("agents").join(agent_name).join("sessions").join("session_meta.json");
+    let json = serde_json::to_string_pretty(meta)
+        .map_err(|e| format!("序列化失败: {}", e))?;
+    fs::write(&meta_path, json)
+        .map_err(|e| format!("写入 session_meta.json 失败: {}", e))
+}
+
+/// Extract first user message text from JSONL content (scan first N lines)
+fn extract_first_user_message(content: &str, max_lines: usize) -> Option<String> {
+    for line in content.lines().take(max_lines) {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+            if val.get("type").and_then(|t| t.as_str()) != Some("message") {
+                continue;
+            }
+            let msg = val.get("message")?;
+            if msg.get("role").and_then(|r| r.as_str()) != Some("user") {
+                continue;
+            }
+            // content can be string or array of {type:"text", text:"..."}
+            if let Some(text) = msg.get("content").and_then(|c| c.as_str()) {
+                return Some(text.chars().take(60).collect());
+            }
+            if let Some(arr) = msg.get("content").and_then(|c| c.as_array()) {
+                for item in arr {
+                    if item.get("type").and_then(|t| t.as_str()) == Some("text") {
+                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                            return Some(text.chars().take(60).collect());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract preview messages (first N user/assistant pairs)
+fn extract_preview_messages(content: &str, max_preview: usize) -> Vec<String> {
+    let mut previews = Vec::new();
+    for line in content.lines() {
+        if previews.len() >= max_preview {
+            break;
+        }
+        let val = match serde_json::from_str::<serde_json::Value>(line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if val.get("type").and_then(|t| t.as_str()) != Some("message") {
+            continue;
+        }
+        let msg = match val.get("message") {
+            Some(m) => m,
+            None => continue,
+        };
+        let role = msg.get("role").and_then(|r| r.as_str()).unwrap_or("");
+        if role != "user" && role != "assistant" {
+            continue;
+        }
+        let prefix = if role == "user" { "👤 " } else { "🤖 " };
+        let text = if let Some(s) = msg.get("content").and_then(|c| c.as_str()) {
+            s.chars().take(50).collect::<String>()
+        } else if let Some(arr) = msg.get("content").and_then(|c| c.as_array()) {
+            arr.iter()
+                .find(|item| item.get("type").and_then(|t| t.as_str()) == Some("text"))
+                .and_then(|item| item.get("text").and_then(|t| t.as_str()))
+                .map(|s| s.chars().take(50).collect::<String>())
+                .unwrap_or_default()
+        } else {
+            continue;
+        };
+        if !text.is_empty() {
+            previews.push(format!("{}{}", prefix, text));
+        }
+    }
+    previews
+}
+
+/// Count message entries in JSONL content
+fn count_messages(content: &str) -> usize {
+    content
+        .lines()
+        .filter(|line| {
+            serde_json::from_str::<serde_json::Value>(line)
+                .ok()
+                .and_then(|v| v.get("type").and_then(|t| t.as_str()).map(|t| t == "message"))
+                .unwrap_or(false)
+        })
+        .count()
+}
+
+#[tauri::command]
+pub fn list_sessions(agent_name: String) -> Result<Vec<SessionInfo>, String> {
+    let base = get_user_openclaw_dir()?;
+    let sessions_dir = base.join("agents").join(&agent_name).join("sessions");
+
+    if !sessions_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let meta = load_session_meta(&agent_name);
+    let mut sessions = Vec::new();
+
+    let entries = fs::read_dir(&sessions_dir)
+        .map_err(|e| format!("读取 sessions 目录失败: {}", e))?;
+
+    for entry in entries.flatten() {
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        // Only active .jsonl files
+        if !file_name.ends_with(".jsonl")
+            || file_name.contains(".deleted")
+            || file_name.contains(".reset")
+            || file_name.contains(".bak")
+        {
+            continue;
+        }
+
+        let content = match fs::read_to_string(entry.path()) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        // Parse first line for session metadata
+        let first_line = match content.lines().next() {
+            Some(l) => l,
+            None => continue,
+        };
+        let header: serde_json::Value = match serde_json::from_str(first_line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let session_id = header
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if session_id.is_empty() {
+            continue;
+        }
+
+        let timestamp = header
+            .get("timestamp")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Name: custom name from meta, or first user message
+        let is_renamed = meta.contains_key(&session_id);
+        let name = if let Some(custom_name) = meta.get(&session_id) {
+            custom_name.clone()
+        } else {
+            extract_first_user_message(&content, 20)
+                .unwrap_or_else(|| "新对话".to_string())
+        };
+
+        let message_count = count_messages(&content);
+        let preview = extract_preview_messages(&content, 2);
+
+        sessions.push(SessionInfo {
+            id: session_id,
+            name,
+            timestamp,
+            message_count,
+            preview,
+            is_renamed,
+        });
+    }
+
+    // Sort by timestamp descending (newest first)
+    sessions.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+    Ok(sessions)
+}
+
+#[tauri::command]
+pub fn rename_session(
+    agent_name: String,
+    session_id: String,
+    new_name: String,
+) -> Result<(), String> {
+    let mut meta = load_session_meta(&agent_name);
+    if new_name.trim().is_empty() {
+        meta.remove(&session_id);
+    } else {
+        meta.insert(session_id, new_name.trim().to_string());
+    }
+    save_session_meta(&agent_name, &meta)
 }
 
 #[cfg(test)]

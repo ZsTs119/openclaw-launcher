@@ -313,6 +313,133 @@
     cursor: not-allowed;
 }
 
+.btn-history {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary) !important;
+}
+
+.btn-history:hover:not(:disabled) {
+    background: rgba(96, 165, 250, 0.08) !important;
+    color: var(--accent-blue) !important;
+}
+
+/* ===== Session History Modal ===== */
+.session-history-list {
+    max-height: 400px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 0;
+}
+
+.session-loading,
+.session-empty {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 32px 16px;
+    font-size: 13px;
+}
+
+.session-item {
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    cursor: default;
+    transition: background 0.15s;
+}
+
+.session-item:hover {
+    background: rgba(96, 165, 250, 0.05);
+}
+
+.session-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.session-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.session-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 320px;
+    transition: color 0.15s;
+}
+
+.session-name:hover {
+    color: var(--accent-blue);
+    text-decoration: underline;
+}
+
+.session-meta {
+    display: flex;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.session-preview {
+    margin-top: 6px;
+    padding-left: 2px;
+}
+
+.session-preview-line {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.5;
+}
+
+.session-rename-input {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+}
+
+.session-rename-input input {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: 12px;
+    background: var(--bg-darker);
+    border: 1px solid var(--accent-blue);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    outline: none;
+    font-family: inherit;
+}
+
+.btn-xs {
+    padding: 2px 4px !important;
+    font-size: 11px !important;
+    min-width: 0 !important;
+    opacity: 0.5;
+}
+
+.btn-xs:hover {
+    opacity: 1;
+}
+
 /* ===== Custom Dropdown ===== */
 .custom-dropdown {
     position: relative;

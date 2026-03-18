@@ -11,11 +11,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle } from "lucide-react";
+import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle, History } from "lucide-react";
 import { motion } from "framer-motion";
 import { Modal } from "./ui/Modal";
 import { CustomDropdown } from "./ui/CustomDropdown";
-import type { AgentInfo, AgentDetail, SkillInfo, AvailableModel } from "../types";
+import type { AgentInfo, AgentDetail, SkillInfo, AvailableModel, SessionInfo } from "../types";
 import "../styles/agents.css";
 
 interface AgentsTabProps {
@@ -42,6 +42,14 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
     const [newSupervisor, setNewSupervisor] = useState(false);
     const [formError, setFormError] = useState("");
     const [saving, setSaving] = useState(false);
+
+    // Session history modal state
+    const [showHistory, setShowHistory] = useState(false);
+    const [historyAgent, setHistoryAgent] = useState("");
+    const [sessions, setSessions] = useState<SessionInfo[]>([]);
+    const [sessionsLoading, setSessionsLoading] = useState(false);
+    const [renamingId, setRenamingId] = useState<string | null>(null);
+    const [renameValue, setRenameValue] = useState("");
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -160,6 +168,60 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
         }
     };
 
+    const handleHistory = async (agentName: string) => {
+        setHistoryAgent(agentName);
+        setShowHistory(true);
+        setSessionsLoading(true);
+        setRenamingId(null);
+        try {
+            const list = await invoke<SessionInfo[]>("list_sessions", { agentName });
+            setSessions(list);
+        } catch (err) {
+            console.error("Failed to load sessions:", err);
+            setSessions([]);
+        } finally {
+            setSessionsLoading(false);
+        }
+    };
+
+    const handleOpenSession = (agentName: string, sessionId: string) => {
+        const port = servicePort || 18789;
+        const url = `http://localhost:${port}/chat?session=agent:${agentName}:${sessionId}`;
+        if (running && servicePort) {
+            openUrl(url);
+        } else {
+            onServiceReadyRef.current = (p: number) => {
+                openUrl(`http://localhost:${p}/chat?session=agent:${agentName}:${sessionId}`);
+            };
+            handleStart();
+        }
+    };
+
+    const handleRenameSession = async (sessionId: string) => {
+        try {
+            await invoke("rename_session", { agentName: historyAgent, sessionId, newName: renameValue });
+            setSessions((prev) =>
+                prev.map((s) =>
+                    s.id === sessionId
+                        ? { ...s, name: renameValue.trim() || s.name, is_renamed: renameValue.trim().length > 0 }
+                        : s
+                )
+            );
+            setRenamingId(null);
+        } catch (err) {
+            console.error("Rename failed:", err);
+        }
+    };
+
+    const formatTime = (ts: string) => {
+        try {
+            const d = new Date(ts);
+            return d.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+        } catch {
+            return ts;
+        }
+    };
+
     // Build dropdown options
     const modelOptions = [
         { value: "", label: "继承默认模型" },
@@ -229,10 +291,19 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
                                 <button
                                     className="btn-ghost btn-chat"
                                     onClick={() => handleChat(agent.name)}
-                                    title="对话"
+                                    title="新对话"
                                 >
-                                    <MessageCircle size={14} strokeWidth={1.5} /> 对话
+                                    <MessageCircle size={14} strokeWidth={1.5} /> 新对话
                                 </button>
+                                {agent.has_sessions && (
+                                    <button
+                                        className="btn-ghost btn-history"
+                                        onClick={() => handleHistory(agent.name)}
+                                        title="历史会话"
+                                    >
+                                        <History size={14} strokeWidth={1.5} /> 历史
+                                    </button>
+                                )}
                                 <button className="btn-ghost" onClick={() => handleEdit(agent.name)} title="编辑">
                                     <Pencil size={14} strokeWidth={1.5} />
                                 </button>
@@ -418,6 +489,71 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
                             {saving ? "删除中..." : "确认删除"}
                         </button>
                     </div>
+                </div>
+            </Modal>
+
+            {/* Session History Modal */}
+            <Modal show={showHistory} onClose={() => setShowHistory(false)} title={`${historyAgent} — 历史会话`} maxWidth={560}>
+                <div className="session-history-list">
+                    {sessionsLoading ? (
+                        <div className="session-loading">加载中...</div>
+                    ) : sessions.length === 0 ? (
+                        <div className="session-empty">没有历史会话</div>
+                    ) : (
+                        sessions.map((s) => (
+                            <div key={s.id} className="session-item">
+                                <div className="session-item-header">
+                                    <div className="session-name-row">
+                                        {renamingId === s.id ? (
+                                            <div className="session-rename-input">
+                                                <input
+                                                    type="text"
+                                                    value={renameValue}
+                                                    onChange={(e) => setRenameValue(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "Enter") handleRenameSession(s.id);
+                                                        if (e.key === "Escape") setRenamingId(null);
+                                                    }}
+                                                    autoFocus
+                                                    placeholder="输入新名称..."
+                                                />
+                                                <button className="btn-ghost btn-xs" onClick={() => handleRenameSession(s.id)}>✓</button>
+                                                <button className="btn-ghost btn-xs" onClick={() => setRenamingId(null)}>✕</button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <span
+                                                    className="session-name"
+                                                    onClick={() => handleOpenSession(historyAgent, s.id)}
+                                                    title="点击打开此会话"
+                                                >
+                                                    {s.name}
+                                                </span>
+                                                <button
+                                                    className="btn-ghost btn-xs"
+                                                    onClick={() => { setRenamingId(s.id); setRenameValue(s.name); }}
+                                                    title="重命名"
+                                                >
+                                                    <Pencil size={11} />
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                    <div className="session-meta">
+                                        <span>{formatTime(s.timestamp)}</span>
+                                        <span>{s.message_count} 条消息</span>
+                                    </div>
+                                </div>
+                                {s.preview.length > 0 && (
+                                    <div className="session-preview">
+                                        {s.preview.map((p, i) => (
+                                            <div key={i} className="session-preview-line">{p}</div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ))
+                    )}
                 </div>
             </Modal>
         </motion.div>
