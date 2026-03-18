@@ -863,6 +863,9 @@ pub fn list_sessions(agent_name: String) -> Result<Vec<SessionInfo>, String> {
     // Sort by timestamp descending (newest first)
     sessions.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
 
+    // Filter out sessions with no user-visible messages (cron/system sessions)
+    sessions.retain(|s| s.message_count > 0);
+
     Ok(sessions)
 }
 
@@ -879,6 +882,30 @@ pub fn rename_session(
         meta.insert(session_id, new_name.trim().to_string());
     }
     save_session_meta(&agent_name, &meta)
+}
+
+#[tauri::command]
+pub fn delete_session(
+    agent_name: String,
+    session_id: String,
+) -> Result<(), String> {
+    let base = get_user_openclaw_dir()?;
+    let sessions_dir = base.join("agents").join(&agent_name).join("sessions");
+
+    // Delete the JSONL file
+    let session_file = sessions_dir.join(format!("{}.jsonl", session_id));
+    if session_file.exists() {
+        fs::remove_file(&session_file)
+            .map_err(|e| format!("删除会话文件失败: {}", e))?;
+    }
+
+    // Remove from session_meta.json if present
+    let mut meta = load_session_meta(&agent_name);
+    if meta.remove(&session_id).is_some() {
+        let _ = save_session_meta(&agent_name, &meta);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

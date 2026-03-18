@@ -152,6 +152,7 @@ pub fn run() {
             agents::list_available_models,
             agents::list_sessions,
             agents::rename_session,
+            agents::delete_session,
             // Provider management
             provider_mgr::list_saved_providers,
             provider_mgr::list_all_models,

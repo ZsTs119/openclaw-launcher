@@ -46,6 +46,8 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
     const [sessionsLoading, setSessionsLoading] = useState(false);
     const [renamingId, setRenamingId] = useState<string | null>(null);
     const [renameValue, setRenameValue] = useState("");
+    const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null);
+    const [deleteCountdown, setDeleteCountdown] = useState(0);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -150,10 +152,9 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
         }
     };
 
-    const handleChat = (agentName: string) => {
-        const sessionName = crypto.randomUUID();
+    const handleChat = (_agentName: string) => {
         openInBrowser((port) =>
-            `http://localhost:${port}/chat?session=agent:${agentName}:${sessionName}`
+            `http://localhost:${port}/chat`
         );
     };
 
@@ -202,6 +203,30 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
             return d.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
         } catch {
             return ts;
+        }
+    };
+
+    // Delete session with countdown confirmation
+    const startDeleteSession = (sessionId: string) => {
+        setDeleteSessionId(sessionId);
+        setDeleteCountdown(3);
+    };
+
+    useEffect(() => {
+        if (deleteCountdown > 0) {
+            const timer = setTimeout(() => setDeleteCountdown((c) => c - 1), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [deleteCountdown]);
+
+    const handleDeleteSession = async () => {
+        if (!deleteSessionId) return;
+        try {
+            await invoke("delete_session", { agentName: historyAgent, sessionId: deleteSessionId });
+            setSessions((prev) => prev.filter((s) => s.id !== deleteSessionId));
+            setDeleteSessionId(null);
+        } catch (err) {
+            console.error("Delete session failed:", err);
         }
     };
 
@@ -520,21 +545,51 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                 )}
                                 <div className="session-card-actions">
                                     <button
-                                        className="btn-ghost btn-sm"
-                                        onClick={() => { setRenamingId(s.id); setRenameValue(s.name); }}
+                                        className="btn-ghost btn-sm btn-delete-session"
+                                        onClick={() => startDeleteSession(s.id)}
                                     >
-                                        <Pencil size={12} /> 重命名
+                                        <Trash2 size={12} /> 删除
                                     </button>
-                                    <button
-                                        className="btn-ghost btn-sm btn-open-session"
-                                        onClick={() => handleOpenSession(s.session_key)}
-                                    >
-                                        <MessageCircle size={12} /> 打开会话
-                                    </button>
+                                    <div className="session-card-actions-right">
+                                        <button
+                                            className="btn-ghost btn-sm"
+                                            onClick={() => { setRenamingId(s.id); setRenameValue(s.name); }}
+                                        >
+                                            <Pencil size={12} /> 重命名
+                                        </button>
+                                        <button
+                                            className="btn-ghost btn-sm btn-open-session"
+                                            onClick={() => handleOpenSession(s.session_key)}
+                                        >
+                                            <MessageCircle size={12} /> 打开会话
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))
                     )}
+                </div>
+            </Modal>
+
+            {/* Delete Session Confirmation */}
+            <Modal show={!!deleteSessionId} onClose={() => setDeleteSessionId(null)} title="删除会话" maxWidth={400}>
+                <div style={{ padding: "8px 0" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, color: "var(--text-warning, #ef4444)" }}>
+                        <AlertTriangle size={16} /> <span>删除后不可恢复</span>
+                    </div>
+                    <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
+                        确定要删除此会话及其所有消息记录吗？此操作无法撤销。
+                    </p>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                        <button className="btn-ghost" onClick={() => setDeleteSessionId(null)}>取消</button>
+                        <button
+                            className="btn-delete"
+                            disabled={deleteCountdown > 0}
+                            onClick={handleDeleteSession}
+                        >
+                            {deleteCountdown > 0 ? `确认删除 (${deleteCountdown}s)` : "确认删除"}
+                        </button>
+                    </div>
                 </div>
             </Modal>
         </motion.div>
