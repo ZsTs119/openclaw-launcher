@@ -155,13 +155,14 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
     };
 
     const handleChat = async (agentName: string) => {
+        // Generate a unique session name to guarantee a fresh session
+        const sessionName = crypto.randomUUID();
         if (running && servicePort) {
-            const url = `http://localhost:${servicePort}/chat?session=agent:${agentName}:main`;
+            const url = `http://localhost:${servicePort}/chat?session=agent:${agentName}:${sessionName}`;
             openUrl(url);
         } else {
-            // Register one-shot callback: fires when service is truly ready with correct port
             onServiceReadyRef.current = (port: number) => {
-                const url = `http://localhost:${port}/chat?session=agent:${agentName}:main`;
+                const url = `http://localhost:${port}/chat?session=agent:${agentName}:${sessionName}`;
                 openUrl(url);
             };
             await handleStart();
@@ -184,16 +185,15 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
         }
     };
 
-    const handleOpenSession = (agentName: string, sessionId: string) => {
-        const port = servicePort || 18789;
-        const url = `http://localhost:${port}/chat?session=agent:${agentName}:${sessionId}`;
+    const handleOpenSession = async (agentName: string, sessionId: string) => {
         if (running && servicePort) {
+            const url = `http://localhost:${servicePort}/chat?session=agent:${agentName}:${sessionId}`;
             openUrl(url);
         } else {
             onServiceReadyRef.current = (p: number) => {
                 openUrl(`http://localhost:${p}/chat?session=agent:${agentName}:${sessionId}`);
             };
-            handleStart();
+            await handleStart();
         }
     };
 
@@ -493,7 +493,7 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
             </Modal>
 
             {/* Session History Modal */}
-            <Modal show={showHistory} onClose={() => setShowHistory(false)} title={`${historyAgent} — 历史会话`} maxWidth={560}>
+            <Modal show={showHistory} onClose={() => setShowHistory(false)} title={`${historyAgent} — 历史会话`} maxWidth={580}>
                 <div className="session-history-list">
                     {sessionsLoading ? (
                         <div className="session-loading">加载中...</div>
@@ -501,47 +501,31 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
                         <div className="session-empty">没有历史会话</div>
                     ) : (
                         sessions.map((s) => (
-                            <div key={s.id} className="session-item">
-                                <div className="session-item-header">
-                                    <div className="session-name-row">
-                                        {renamingId === s.id ? (
-                                            <div className="session-rename-input">
-                                                <input
-                                                    type="text"
-                                                    value={renameValue}
-                                                    onChange={(e) => setRenameValue(e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === "Enter") handleRenameSession(s.id);
-                                                        if (e.key === "Escape") setRenamingId(null);
-                                                    }}
-                                                    autoFocus
-                                                    placeholder="输入新名称..."
-                                                />
-                                                <button className="btn-ghost btn-xs" onClick={() => handleRenameSession(s.id)}>✓</button>
-                                                <button className="btn-ghost btn-xs" onClick={() => setRenamingId(null)}>✕</button>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <span
-                                                    className="session-name"
-                                                    onClick={() => handleOpenSession(historyAgent, s.id)}
-                                                    title="点击打开此会话"
-                                                >
-                                                    {s.name}
-                                                </span>
-                                                <button
-                                                    className="btn-ghost btn-xs"
-                                                    onClick={() => { setRenamingId(s.id); setRenameValue(s.name); }}
-                                                    title="重命名"
-                                                >
-                                                    <Pencil size={11} />
-                                                </button>
-                                            </>
-                                        )}
-                                    </div>
-                                    <div className="session-meta">
+                            <div key={s.id} className="session-card">
+                                <div className="session-card-top">
+                                    {renamingId === s.id ? (
+                                        <div className="session-rename-input">
+                                            <input
+                                                type="text"
+                                                value={renameValue}
+                                                onChange={(e) => setRenameValue(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") handleRenameSession(s.id);
+                                                    if (e.key === "Escape") setRenamingId(null);
+                                                }}
+                                                autoFocus
+                                                placeholder="输入新名称..."
+                                            />
+                                            <button className="btn-ghost btn-sm" onClick={() => handleRenameSession(s.id)}>✓</button>
+                                            <button className="btn-ghost btn-sm" onClick={() => setRenamingId(null)}>✕</button>
+                                        </div>
+                                    ) : (
+                                        <div className="session-card-name">{s.name}</div>
+                                    )}
+                                    <div className="session-card-meta">
                                         <span>{formatTime(s.timestamp)}</span>
-                                        <span>{s.message_count} 条消息</span>
+                                        <span>·</span>
+                                        <span>{s.message_count} 条</span>
                                     </div>
                                 </div>
                                 {s.preview.length > 0 && (
@@ -551,6 +535,20 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
                                         ))}
                                     </div>
                                 )}
+                                <div className="session-card-actions">
+                                    <button
+                                        className="btn-ghost btn-sm"
+                                        onClick={() => { setRenamingId(s.id); setRenameValue(s.name); }}
+                                    >
+                                        <Pencil size={12} /> 重命名
+                                    </button>
+                                    <button
+                                        className="btn-ghost btn-sm btn-open-session"
+                                        onClick={() => handleOpenSession(historyAgent, s.id)}
+                                    >
+                                        <MessageCircle size={12} /> 打开会话
+                                    </button>
+                                </div>
                             </div>
                         ))
                     )}

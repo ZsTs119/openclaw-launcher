@@ -328,12 +328,12 @@
 
 /* ===== Session History Modal ===== */
 .session-history-list {
-    max-height: 400px;
+    max-height: 480px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 4px 0;
+    gap: 8px;
+    padding: 8px 0;
 }
 
 .session-loading,
@@ -344,52 +344,39 @@
     font-size: 13px;
 }
 
-.session-item {
-    padding: 10px 14px;
+.session-card {
+    padding: 12px 14px;
+    border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    cursor: default;
-    transition: background 0.15s;
+    transition: border-color 0.15s, background 0.15s;
 }
 
-.session-item:hover {
-    background: rgba(96, 165, 250, 0.05);
+.session-card:hover {
+    border-color: rgba(96, 165, 250, 0.25);
+    background: rgba(96, 165, 250, 0.03);
 }
 
-.session-item-header {
+.session-card-top {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     gap: 12px;
 }
 
-.session-name-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+.session-card-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     flex: 1;
     min-width: 0;
 }
 
-.session-name {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-primary);
-    cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 320px;
-    transition: color 0.15s;
-}
-
-.session-name:hover {
-    color: var(--accent-blue);
-    text-decoration: underline;
-}
-
-.session-meta {
+.session-card-meta {
     display: flex;
-    gap: 10px;
+    gap: 6px;
     font-size: 11px;
     color: var(--text-secondary);
     white-space: nowrap;
@@ -408,6 +395,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.5;
+}
+
+.session-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .session-rename-input {
@@ -429,15 +425,20 @@
     font-family: inherit;
 }
 
-.btn-xs {
-    padding: 2px 4px !important;
+.btn-sm {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px !important;
     font-size: 11px !important;
-    min-width: 0 !important;
-    opacity: 0.5;
 }
 
-.btn-xs:hover {
-    opacity: 1;
+.btn-open-session {
+    color: var(--accent-blue) !important;
+}
+
+.btn-open-session:hover {
+    background: rgba(96, 165, 250, 0.1) !important;
 }
 
 /* ===== Custom Dropdown ===== */
