@@ -10,7 +10,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle, History } from "lucide-react";
 import { motion } from "framer-motion";
 import { Modal } from "./ui/Modal";
@@ -19,13 +18,10 @@ import type { AgentInfo, AgentDetail, SkillInfo, AvailableModel, SessionInfo } f
 import "../styles/agents.css";
 
 interface AgentsTabProps {
-    servicePort: number | null;
-    running: boolean;
-    handleStart: () => Promise<void>;
-    onServiceReadyRef: React.MutableRefObject<((port: number) => void) | null>;
+    openInBrowser: (buildUrl: (port: number) => string) => Promise<void>;
 }
 
-export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef }: AgentsTabProps) {
+export function AgentsTab({ openInBrowser }: AgentsTabProps) {
     const [agents, setAgents] = useState<AgentInfo[]>([]);
     const [skills, setSkills] = useState<SkillInfo[]>([]);
     const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
@@ -154,19 +150,11 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
         }
     };
 
-    const handleChat = async (agentName: string) => {
-        // Generate a unique session name to guarantee a fresh session
+    const handleChat = (agentName: string) => {
         const sessionName = crypto.randomUUID();
-        if (running && servicePort) {
-            const url = `http://localhost:${servicePort}/chat?session=agent:${agentName}:${sessionName}`;
-            openUrl(url);
-        } else {
-            onServiceReadyRef.current = (port: number) => {
-                const url = `http://localhost:${port}/chat?session=agent:${agentName}:${sessionName}`;
-                openUrl(url);
-            };
-            await handleStart();
-        }
+        openInBrowser((port) =>
+            `http://localhost:${port}/chat?session=agent:${agentName}:${sessionName}`
+        );
     };
 
     const handleHistory = async (agentName: string) => {
@@ -185,16 +173,11 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
         }
     };
 
-    const handleOpenSession = async (sessionKey: string) => {
-        if (running && servicePort) {
-            const url = `http://localhost:${servicePort}/chat?session=${encodeURIComponent(sessionKey)}`;
-            openUrl(url);
-        } else {
-            onServiceReadyRef.current = (p: number) => {
-                openUrl(`http://localhost:${p}/chat?session=${encodeURIComponent(sessionKey)}`);
-            };
-            await handleStart();
-        }
+    const handleOpenSession = (sessionKey: string) => {
+        setShowHistory(false); // Close modal so startup overlay is visible
+        openInBrowser((port) =>
+            `http://localhost:${port}/chat?session=${encodeURIComponent(sessionKey)}`
+        );
     };
 
     const handleRenameSession = async (sessionId: string) => {

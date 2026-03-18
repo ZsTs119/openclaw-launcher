@@ -12,6 +12,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 import type { AppPhase } from "../types";
 
@@ -123,6 +124,24 @@ export function useService({
         }
     }, [addLog]);
 
+    /**
+     * Shared utility: open a URL in browser, handling cold-start automatically.
+     * - Hot start (service running): opens immediately
+     * - Cold start: shows startup overlay → waits for service ready → opens
+     *
+     * @param buildUrl - function that receives the service port and returns the full URL
+     */
+    const openInBrowser = useCallback(async (buildUrl: (port: number) => string) => {
+        if (running && servicePort) {
+            openUrl(buildUrl(servicePort));
+        } else {
+            onServiceReadyRef.current = (port: number) => {
+                openUrl(buildUrl(port));
+            };
+            await handleStart();
+        }
+    }, [running, servicePort, handleStart]);
+
     const handleStop = useCallback(async () => {
         setLoading(true);
         try {
@@ -214,6 +233,6 @@ export function useService({
         confirmReinstall,
         confirmFactoryReset,
         handleRepairConnection,
-        onServiceReadyRef,
+        openInBrowser,
     };
 }
