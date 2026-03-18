@@ -30,6 +30,7 @@ export interface AgentInfo {
 
 export interface SessionInfo {
     id: string;
+    session_key: string;
     name: string;
     timestamp: string;
     message_count: number;

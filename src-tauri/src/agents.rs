@@ -625,6 +625,8 @@ pub fn list_skills() -> Result<Vec<SkillInfo>, String> {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SessionInfo {
     pub id: String,
+    /// The session key used in the gateway URL (e.g. "agent:main:main")
+    pub session_key: String,
     pub name: String,
     pub timestamp: String,
     pub message_count: usize,
@@ -772,6 +774,21 @@ pub fn list_sessions(agent_name: String) -> Result<Vec<SessionInfo>, String> {
     let meta = load_session_meta(&agent_name);
     let mut sessions = Vec::new();
 
+    // Build reverse map: sessionId → sessionKey from gateway's sessions.json
+    let mut id_to_key: HashMap<String, String> = HashMap::new();
+    let sessions_json_path = sessions_dir.join("sessions.json");
+    if let Ok(data) = fs::read_to_string(&sessions_json_path) {
+        if let Ok(index) = serde_json::from_str::<serde_json::Value>(&data) {
+            if let Some(obj) = index.as_object() {
+                for (key, val) in obj {
+                    if let Some(sid) = val.get("sessionId").and_then(|v| v.as_str()) {
+                        id_to_key.insert(sid.to_string(), key.clone());
+                    }
+                }
+            }
+        }
+    }
+
     let entries = fs::read_dir(&sessions_dir)
         .map_err(|e| format!("读取 sessions 目录失败: {}", e))?;
 
@@ -825,11 +842,16 @@ pub fn list_sessions(agent_name: String) -> Result<Vec<SessionInfo>, String> {
                 .unwrap_or_else(|| "新对话".to_string())
         };
 
+        // Look up the session key from sessions.json reverse map
+        let session_key = id_to_key.get(&session_id).cloned()
+            .unwrap_or_else(|| format!("agent:{}:{}", agent_name, session_id));
+
         let message_count = count_messages(&content);
         let preview = extract_preview_messages(&content, 2);
 
         sessions.push(SessionInfo {
             id: session_id,
+            session_key,
             name,
             timestamp,
             message_count,

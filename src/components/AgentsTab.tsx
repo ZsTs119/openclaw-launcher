@@ -185,13 +185,13 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
         }
     };
 
-    const handleOpenSession = async (agentName: string, sessionId: string) => {
+    const handleOpenSession = async (sessionKey: string) => {
         if (running && servicePort) {
-            const url = `http://localhost:${servicePort}/chat?session=agent:${agentName}:${sessionId}`;
+            const url = `http://localhost:${servicePort}/chat?session=${encodeURIComponent(sessionKey)}`;
             openUrl(url);
         } else {
             onServiceReadyRef.current = (p: number) => {
-                openUrl(`http://localhost:${p}/chat?session=agent:${agentName}:${sessionId}`);
+                openUrl(`http://localhost:${p}/chat?session=${encodeURIComponent(sessionKey)}`);
             };
             await handleStart();
         }
@@ -544,7 +544,7 @@ export function AgentsTab({ servicePort, running, handleStart, onServiceReadyRef
                                     </button>
                                     <button
                                         className="btn-ghost btn-sm btn-open-session"
-                                        onClick={() => handleOpenSession(historyAgent, s.id)}
+                                        onClick={() => handleOpenSession(s.session_key)}
                                     >
                                         <MessageCircle size={12} /> 打开会话
                                     </button>
