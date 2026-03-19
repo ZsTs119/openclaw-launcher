@@ -48,6 +48,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
     const [renameValue, setRenameValue] = useState("");
     const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null);
     const [deleteCountdown, setDeleteCountdown] = useState(0);
+    const [agentDeleteCountdown, setAgentDeleteCountdown] = useState(0);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -219,12 +220,22 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
         }
     }, [deleteCountdown]);
 
+    // Agent delete countdown timer
+    useEffect(() => {
+        if (agentDeleteCountdown > 0) {
+            const timer = setTimeout(() => setAgentDeleteCountdown((c) => c - 1), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [agentDeleteCountdown]);
+
     const handleDeleteSession = async () => {
         if (!deleteSessionId) return;
         try {
             await invoke("delete_session", { agentName: historyAgent, sessionId: deleteSessionId });
             setSessions((prev) => prev.filter((s) => s.id !== deleteSessionId));
             setDeleteSessionId(null);
+            // Refresh agent list so has_sessions badge updates immediately
+            loadData();
         } catch (err) {
             console.error("Delete session failed:", err);
         }
@@ -299,9 +310,9 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                 <button
                                     className="btn-ghost btn-chat"
                                     onClick={() => handleChat(agent.name)}
-                                    title="新对话"
+                                    title="打开对话"
                                 >
-                                    <MessageCircle size={14} strokeWidth={1.5} /> 新对话
+                                    <MessageCircle size={14} strokeWidth={1.5} /> 打开对话
                                 </button>
                                 {agent.has_sessions && (
                                     <button
@@ -329,6 +340,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                                 is_default: agent.is_default,
                                                 is_supervisor: false,
                                             });
+                                            setAgentDeleteCountdown(3);
                                             setShowDelete(true);
                                         }}
                                         title="删除"
@@ -486,15 +498,23 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
             {/* Delete Confirm */}
             <Modal show={showDelete} onClose={() => setShowDelete(false)} title="确认删除" maxWidth={400}>
                 <div className="modal-form">
-                    <p style={{ color: "var(--text-secondary)", margin: "12px 0 20px" }}>
+                    <p style={{ color: "var(--text-secondary)", margin: "12px 0 8px" }}>
                         确定要删除 Agent <strong style={{ color: "var(--text-primary)" }}>{selectedAgent?.name}</strong> 吗？
-                        <br />
-                        <span style={{ fontSize: "12px" }}>将同时删除 workspace 和会话记录，此操作不可撤销。</span>
+                    </p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, color: "var(--text-warning, #ef4444)" }}>
+                        <AlertTriangle size={16} /> <span>删除后不可恢复</span>
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 16 }}>
+                        将同时删除 workspace 和所有会话记录，此操作无法撤销。
                     </p>
                     <div className="form-actions">
                         <button className="btn-secondary" onClick={() => setShowDelete(false)}>取消</button>
-                        <button className="btn-danger" onClick={handleDelete} disabled={saving}>
-                            {saving ? "删除中..." : "确认删除"}
+                        <button
+                            className="btn-delete"
+                            disabled={saving || agentDeleteCountdown > 0}
+                            onClick={handleDelete}
+                        >
+                            {saving ? "删除中..." : agentDeleteCountdown > 0 ? `确认删除 (${agentDeleteCountdown}s)` : "确认删除"}
                         </button>
                     </div>
                 </div>
