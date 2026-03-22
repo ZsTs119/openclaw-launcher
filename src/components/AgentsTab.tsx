@@ -377,6 +377,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
             <div className="skills-section">
                 <h3 className="skills-title">
                     <Sparkles size={16} strokeWidth={1.5} /> 已安装技能
+                    <span className="skills-count">{skills.length}</span>
                 </h3>
                 {skills.length === 0 ? (
                     <div className="skills-empty">暂无技能</div>
@@ -384,8 +385,18 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                     <div className="skills-grid">
                         {skills.map((skill) => (
                             <div key={skill.path} className="skill-card">
-                                <div className="skill-name">{skill.name}</div>
-                                <div className="skill-desc">{skill.description || "无描述"}</div>
+                                <div className="skill-card-header">
+                                    <Sparkles size={14} strokeWidth={1.5} className="skill-icon" />
+                                    <div className="skill-name">{skill.name}</div>
+                                </div>
+                                <div className="skill-desc">
+                                    {skill.description || "无描述"}
+                                </div>
+                                <div className="skill-footer">
+                                    <span className="skill-path-hint" title={skill.path}>
+                                        {skill.path.split(/[/\\]/).slice(-2).join("/")}
+                                    </span>
+                                </div>
                             </div>
                         ))}
                     </div>

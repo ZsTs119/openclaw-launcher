@@ -715,6 +715,9 @@ pub fn list_available_models() -> Result<Vec<AvailableModel>, String> {
 
 #[tauri::command]
 pub fn list_skills() -> Result<Vec<SkillInfo>, String> {
+    // Ensure built-in skills exist (idempotent, best-effort)
+    ensure_builtin_resources();
+
     let dir = match skills_dir() {
         Ok(d) => d,
         Err(_) => return Ok(Vec::new()),
@@ -746,18 +749,38 @@ pub fn list_skills() -> Result<Vec<SkillInfo>, String> {
         };
 
         // Parse YAML frontmatter: ---\nname: ...\ndescription: ...\n---
+        // Handles both single-line and multi-line (>) folded scalars
         let mut skill_name = entry.file_name().to_string_lossy().to_string();
         let mut description = String::new();
 
         if content.starts_with("---") {
             if let Some(end) = content[3..].find("---") {
                 let frontmatter = &content[3..3 + end];
+                let mut in_description = false;
                 for line in frontmatter.lines() {
-                    let line = line.trim();
-                    if let Some(val) = line.strip_prefix("name:") {
+                    if let Some(val) = line.trim().strip_prefix("name:") {
+                        in_description = false;
                         skill_name = val.trim().trim_matches('"').trim_matches('\'').to_string();
-                    } else if let Some(val) = line.strip_prefix("description:") {
-                        description = val.trim().trim_matches('"').trim_matches('\'').to_string();
+                    } else if let Some(val) = line.trim().strip_prefix("description:") {
+                        let val = val.trim().trim_matches('"').trim_matches('\'');
+                        if val == ">" || val == "|" || val.is_empty() {
+                            // Multi-line YAML folded/literal scalar
+                            in_description = true;
+                            description.clear();
+                        } else {
+                            in_description = false;
+                            description = val.to_string();
+                        }
+                    } else if in_description {
+                        let trimmed = line.trim();
+                        if trimmed.is_empty() || (!line.starts_with(' ') && !line.starts_with('\t')) {
+                            in_description = false;
+                        } else {
+                            if !description.is_empty() {
+                                description.push(' ');
+                            }
+                            description.push_str(trimmed);
+                        }
                     }
                 }
             }
