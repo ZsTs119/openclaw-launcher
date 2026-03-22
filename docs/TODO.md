@@ -195,6 +195,28 @@
 - [x] 数据统计页滚动条修复 ✅
 - [x] 已安装技能列表展示 ✅
 
+### 🔧 Phase 8.5: 权限图 + 内置技能 + ClawHub 浏览 → `v0.6.0`
+
+#### 8.5.1 自动迁移 + 内置技能
+- [ ] Rust `ensure_builtin_resources()` 核心函数
+- [ ] OPENCLAW.md 自动写入每个 agent workspace
+- [ ] 内置技能安装（bomb-dog-sniff + agent-reach）
+- [ ] 调用点 1: `setup_openclaw()` Step 5 后（新用户）
+- [ ] 调用点 2: `start_service()` 成功后（老用户升级）
+- [ ] 调用点 3: `create_agent()` 后（新 agent）
+- [ ] 调用点 4: 一键修复流程
+
+#### 8.5.2 Agent 权限图
+- [ ] Rust `AgentInfo` 新增 `allow_agents` 字段
+- [ ] `update_agent_permission` 支持 `Vec<String>`
+- [ ] 编辑弹窗：toggle → 多选 checkbox（动态 agent 列表）
+- [ ] 删除 agent → 其他 agent 权限自动清除该 id
+
+#### 8.5.3 ClawHub 技能浏览器
+- [ ] Rust `search_clawhub_skills` + `install_clawhub_skill`
+- [ ] `SkillBrowser.tsx` 弹窗（搜索 + 结果 + 安装）
+- [ ] AgentsTab 技能区加「探索技能」按钮
+
 ### 📱 Phase 9: 平台接入配置 → `v0.7.0`
 - [ ] config.rs 重构: 字符串拼接 → `serde_json::Value` 结构化读写
 - [ ] Telegram 配置引导（@BotFather → Token → 策略）
