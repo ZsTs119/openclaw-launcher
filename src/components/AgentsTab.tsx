@@ -161,8 +161,9 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
     };
 
     const handleNewChat = (agentName: string) => {
+        const ts = Date.now();
         openInBrowser((port) =>
-            `http://localhost:${port}/chat?session=agent:${agentName}:launcher`
+            `http://localhost:${port}/chat?session=${encodeURIComponent(`agent:${agentName}:chat-${ts}`)}`
         );
     };
 
@@ -316,17 +317,17 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                             <div className="agent-card-actions">
                                 <button
                                     className="btn-ghost btn-chat"
+                                    onClick={() => handleNewChat(agent.name)}
+                                    title="新建会话"
+                                >
+                                    <SquarePlus size={14} strokeWidth={1.5} /> 新建会话
+                                </button>
+                                <button
+                                    className="btn-ghost btn-chat"
                                     onClick={() => handleChat(agent)}
                                     title="打开对话"
                                 >
                                     <MessageCircle size={14} strokeWidth={1.5} /> 打开对话
-                                </button>
-                                <button
-                                    className="btn-ghost btn-new-chat"
-                                    onClick={() => handleNewChat(agent.name)}
-                                    title="新建会话"
-                                >
-                                    <SquarePlus size={14} strokeWidth={1.5} /> 新建
                                 </button>
                                 {agent.has_sessions && (
                                     <button
