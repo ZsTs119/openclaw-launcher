@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle, History } from "lucide-react";
+import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle, History, SquarePlus } from "lucide-react";
 import { motion } from "framer-motion";
 import { Modal } from "./ui/Modal";
 import { CustomDropdown } from "./ui/CustomDropdown";
@@ -153,7 +153,14 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
         }
     };
 
-    const handleChat = (agentName: string) => {
+    const handleChat = (agent: AgentInfo) => {
+        const sessionKey = agent.last_chat_session_key ?? `agent:${agent.name}:launcher`;
+        openInBrowser((port) =>
+            `http://localhost:${port}/chat?session=${encodeURIComponent(sessionKey)}`
+        );
+    };
+
+    const handleNewChat = (agentName: string) => {
         openInBrowser((port) =>
             `http://localhost:${port}/chat?session=agent:${agentName}:launcher`
         );
@@ -309,10 +316,17 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                             <div className="agent-card-actions">
                                 <button
                                     className="btn-ghost btn-chat"
-                                    onClick={() => handleChat(agent.name)}
+                                    onClick={() => handleChat(agent)}
                                     title="打开对话"
                                 >
                                     <MessageCircle size={14} strokeWidth={1.5} /> 打开对话
+                                </button>
+                                <button
+                                    className="btn-ghost btn-new-chat"
+                                    onClick={() => handleNewChat(agent.name)}
+                                    title="新建会话"
+                                >
+                                    <SquarePlus size={14} strokeWidth={1.5} /> 新建
                                 </button>
                                 {agent.has_sessions && (
                                     <button

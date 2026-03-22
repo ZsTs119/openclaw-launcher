@@ -19,6 +19,8 @@ pub struct AgentInfo {
     pub has_sessions: bool,
     pub is_default: bool,
     pub model_valid: bool,
+    /// The session key of the last interactive chat session (non-cron, non-heartbeat)
+    pub last_chat_session_key: Option<String>,
 }
 
 /// Detail for a single agent
@@ -328,6 +330,70 @@ fn update_agent_permission(agent_id: &str, is_supervisor: bool) -> Result<(), St
     write_config(&config)
 }
 
+// ─────────── Session Helpers ───────────
+
+/// Find the last interactive chat session key for an agent.
+/// Filters out cron, telegram, heartbeat (main), and empty sessions.
+fn find_last_chat_session_key(agent_name: &str) -> Option<String> {
+    let base = get_user_openclaw_dir().ok()?;
+    let sessions_dir = base.join("agents").join(agent_name).join("sessions");
+    let sessions_json = sessions_dir.join("sessions.json");
+
+    if !sessions_json.exists() {
+        return None;
+    }
+
+    let content = fs::read_to_string(&sessions_json).ok()?;
+    let parsed: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let map = parsed.as_object()?;
+
+    // Build key→(sessionId, timestamp) for non-cron/non-telegram/non-main sessions
+    let mut candidates: Vec<(String, String)> = Vec::new(); // (key, timestamp)
+
+    for (key, val) in map {
+        // Skip cron, telegram, and the heartbeat "main" session
+        if key.contains(":cron:") || key.contains(":telegram:") {
+            continue;
+        }
+        // Skip the primary heartbeat session (agent:{name}:main)
+        if key == &format!("agent:{}:main", agent_name) {
+            continue;
+        }
+
+        let session_id = match val.get("sessionId").and_then(|v| v.as_str()) {
+            Some(id) => id,
+            None => continue,
+        };
+
+        // Check the JSONL file exists and has user messages
+        let jsonl_path = sessions_dir.join(format!("{}.jsonl", session_id));
+        if !jsonl_path.exists() {
+            continue;
+        }
+
+        let jsonl_content = match fs::read_to_string(&jsonl_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        if count_messages(&jsonl_content) == 0 {
+            continue;
+        }
+
+        // Get timestamp from first line
+        let timestamp = jsonl_content.lines().next()
+            .and_then(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+            .and_then(|h| h.get("timestamp").and_then(|t| t.as_str()).map(|s| s.to_string()))
+            .unwrap_or_default();
+
+        candidates.push((key.clone(), timestamp));
+    }
+
+    // Sort by timestamp descending, return newest
+    candidates.sort_by(|a, b| b.1.cmp(&a.1));
+    candidates.into_iter().next().map(|(key, _)| key)
+}
+
 // ─────────── Tauri Commands ───────────
 
 #[tauri::command]
@@ -346,6 +412,7 @@ pub fn list_agents() -> Result<Vec<AgentInfo>, String> {
         let name = entry.file_name().to_string_lossy().to_string();
         let (model, provider) = extract_model_from_config(&config, &name);
         let has_sessions = count_active_sessions(&entry.path().join("sessions")) > 0;
+        let last_chat_session_key = find_last_chat_session_key(&name);
 
         // Check if the agent's provider still exists in config
         let model_valid = provider.as_ref()
@@ -358,6 +425,7 @@ pub fn list_agents() -> Result<Vec<AgentInfo>, String> {
             model,
             has_sessions,
             model_valid,
+            last_chat_session_key,
         });
     }
 

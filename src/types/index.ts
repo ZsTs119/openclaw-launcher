@@ -26,6 +26,7 @@ export interface AgentInfo {
     has_sessions: boolean;
     is_default: boolean;
     model_valid: boolean;
+    last_chat_session_key: string | null;
 }
 
 export interface SessionInfo {
