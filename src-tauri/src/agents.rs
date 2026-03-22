@@ -318,6 +318,8 @@ pub fn ensure_builtin_resources() {
         let builtins = [
             ("bomb-dog-sniff", include_str!("../../docs/skills/bomb-dog-sniff/SKILL.md")),
             ("agent-reach", include_str!("../../docs/skills/agent-reach/SKILL.md")),
+            ("awesome-openclaw-skills", include_str!("../../docs/skills/awesome-openclaw-skills/SKILL.md")),
+            ("awesome-openclaw-usecases", include_str!("../../docs/skills/awesome-openclaw-usecases/SKILL.md")),
         ];
         for (name, content) in &builtins {
             let skill_dir = skills_dir.join(name);
