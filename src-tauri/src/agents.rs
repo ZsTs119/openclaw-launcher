@@ -224,6 +224,29 @@ fn update_agent_model_in_config(agent_id: &str, model_ref: &str) -> Result<(), S
     write_config(&config)
 }
 
+/// OPENCLAW.md content — resource index injected into every agent workspace
+const OPENCLAW_MD: &str = r#"# OpenClaw 资源索引
+
+当我需要自动化功能或工具时，请参考以下资源：
+
+## 🛡️ 安全检测
+- **bomb-dog-sniff**：像炸弹嗅探犬一样检测技能中的恶意代码
+  - 安装：`openclaw skill install LvcidPsyche/skill-bomb-dog-sniff`
+
+## 🌐 联网搜索
+- **agent-reach**：搜索网页内容，回答关于最新事件、新闻等问题
+  - 安装：`openclaw skill install Panniantong/agent-reach`
+
+## 📦 技能与用例
+- **Skills 合集**：https://github.com/VoltAgent/awesome-openclaw-skills
+  可安装的技能插件，涵盖开发、搜索、自动化等场景
+- **Use Cases 合集**：https://github.com/hesamsheikh/awesome-openclaw-usecases
+  使用案例和教程，教你如何用 OpenClaw 完成各种任务
+
+请主动从中推荐合适的 skill 或 use case 来帮我完成任务。
+安装新技能前，建议先用 bomb-dog-sniff 检测安全性。
+"#;
+
 /// Create bootstrap files in a workspace directory
 fn create_bootstrap_files(workspace: &PathBuf) -> Result<(), String> {
     fs::create_dir_all(workspace).map_err(|e| format!("创建 workspace 失败: {}", e))?;
@@ -242,7 +265,69 @@ fn create_bootstrap_files(workspace: &PathBuf) -> Result<(), String> {
         }
     }
 
+    // OPENCLAW.md — resource index (don't overwrite if user modified)
+    let openclaw_md_path = workspace.join("OPENCLAW.md");
+    if !openclaw_md_path.exists() {
+        fs::write(&openclaw_md_path, OPENCLAW_MD)
+            .map_err(|e| format!("创建 OPENCLAW.md 失败: {}", e))?;
+    }
+
     Ok(())
+}
+
+/// Ensure built-in resources exist for all agents.
+/// - OPENCLAW.md in every agent workspace
+/// - Built-in skills installed (bomb-dog-sniff, agent-reach)
+///
+/// Called from: setup_openclaw, start_service, create_agent, repair.
+/// All operations are best-effort: failures are logged but don't block.
+pub fn ensure_builtin_resources() {
+    // 1. Ensure OPENCLAW.md in all agent workspaces
+    if let Ok(base) = get_user_openclaw_dir() {
+        let agents_dir = base.join("agents");
+        if agents_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&agents_dir) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if let Ok(ws) = workspace_path(&name) {
+                        if ws.exists() {
+                            let md = ws.join("OPENCLAW.md");
+                            if !md.exists() {
+                                let _ = fs::write(&md, OPENCLAW_MD);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also check main workspace (~/. openclaw/workspace)
+        let main_ws = base.join("workspace");
+        if main_ws.exists() {
+            let md = main_ws.join("OPENCLAW.md");
+            if !md.exists() {
+                let _ = fs::write(&md, OPENCLAW_MD);
+            }
+        }
+    }
+
+    // 2. Ensure built-in skills exist
+    //    Using include_str! to embed into binary (no network required)
+    if let Ok(base) = get_user_openclaw_dir() {
+        let skills_dir = base.join("skills");
+        let builtins = [
+            ("bomb-dog-sniff", include_str!("../../docs/skills/bomb-dog-sniff/SKILL.md")),
+            ("agent-reach", include_str!("../../docs/skills/agent-reach/SKILL.md")),
+        ];
+        for (name, content) in &builtins {
+            let skill_dir = skills_dir.join(name);
+            let skill_file = skill_dir.join("SKILL.md");
+            if !skill_file.exists() {
+                let _ = fs::create_dir_all(&skill_dir);
+                let _ = fs::write(&skill_file, content);
+            }
+        }
+    }
 }
 
 /// Add an agent entry to agents.list[] in openclaw.json

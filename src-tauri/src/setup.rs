@@ -231,6 +231,9 @@ pub async fn setup_openclaw(app: tauri::AppHandle) -> Result<String, String> {
     // Step 5: Install preset skills
     install_preset_skills(app.clone())?;
 
+    // Step 6: Ensure built-in resources (OPENCLAW.md + built-in skills)
+    crate::agents::ensure_builtin_resources();
+
     let _ = app.emit("setup-progress", serde_json::json!({
         "stage": "all_done",
         "message": "🎉 OpenClaw 安装完成！可以点击启动了！",

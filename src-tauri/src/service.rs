@@ -374,6 +374,9 @@ pub async fn start_service(
         *port_guard = chosen_port;
     }
 
+    // Ensure built-in resources for existing users who upgrade
+    crate::agents::ensure_builtin_resources();
+
     Ok("Service started".to_string())
 }
 
