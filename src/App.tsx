@@ -376,7 +376,7 @@ function App() {
       </ConfirmModal>
 
       {/* Startup Overlay — shown while service is starting up */}
-      <StartupOverlay show={startingUp} />
+      <StartupOverlay show={startingUp} onDismiss={() => setStartingUp(false)} />
 
       {/* Connection Repair Toast */}
       <RepairToast
