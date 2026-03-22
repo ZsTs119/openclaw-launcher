@@ -153,8 +153,10 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
         }
     };
 
-    const handleChat = (_agentName: string) => {
-        openInBrowser((port) => `http://localhost:${port}/chat`);
+    const handleChat = (agentName: string) => {
+        openInBrowser((port) =>
+            `http://localhost:${port}/chat?session=agent:${agentName}:launcher`
+        );
     };
 
     const handleHistory = async (agentName: string) => {
