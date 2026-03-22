@@ -168,16 +168,29 @@
 - [x] openclaw.json agents.list 同步 ✅
 
 #### 8.3 Agent 对话 + 会话
-- [x] 卡片「💬 对话」按钮 → 浏览器打开 agent 会话 ✅
-- [ ] 「💬 对话」→「新对话」文案更新
-- [ ] 「历史会话」按钮（仅有历史时显示）→ 弹窗
-- [ ] 历史弹窗：会话列表（名称 + 时间 + 前 2 条消息预览）
-- [ ] 会话命名：默认首条用户消息，支持重命名
-- [ ] 点击历史会话 → 浏览器打开 `/chat?session=agent:{name}:{sessionId}`
-- [ ] Rust 后端：`list_sessions` 命令（读取 JSONL、提取元数据）
-- [ ] Rust 后端：`rename_session` 命令（session_meta.json 存储）
+- [x] 卡片「对话」按钮 → 浏览器打开 agent 会话 ✅
+- [x] 「新对话」→「打开对话」文案更新 ✅
+- [x] 「历史会话」按钮（仅有历史时显示）→ 弹窗 ✅
+- [x] 历史弹窗：会话列表（名称 + 时间 + 前 2 条消息预览）✅
+- [x] 会话命名：默认首条用户消息，支持重命名 ✅
+- [x] 点击历史会话 → 浏览器打开 `/chat?session=<sessionKey>` ✅
+- [x] Rust 后端：`list_sessions` 命令（读取 JSONL、提取元数据）✅
+- [x] Rust 后端：`rename_session` 命令（session_meta.json 存储）✅
+- [x] 会话删除 3s 倒计时确认 ✅
+- [x] Agent 删除 3s 倒计时确认 ✅
 
-#### 8.4 其它
+#### 8.4 Agent 状态管理（Phase 1）
+- [x] `last_chat_session_key`：每 agent 追踪最新聊天 session ✅
+- [x] 「打开对话」→ 恢复上次聊天 session（有历史→恢复，无→新建）✅
+- [x] 「新建会话」→ 创建唯一 `agent:{name}:chat-{timestamp}` session ✅
+- [x] 新建后动态更新本地状态（下次打开对话指向新 session）✅
+- [x] Rust `find_last_chat_session_key`：过滤 cron/telegram/heartbeat ✅
+
+#### 8.5 启动弹窗优化
+- [x] 点击任意位置关闭启动弹窗 ✅
+- [x] 30 秒超时自动关闭 ✅
+
+#### 8.6 其它
 - [x] 数据统计 Tab 占位页面 ✅
 - [x] 数据统计页滚动条修复 ✅
 - [x] 已安装技能列表展示 ✅
