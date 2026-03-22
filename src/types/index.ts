@@ -64,6 +64,13 @@ export interface SkillInfo {
     path: string;
 }
 
+export interface SkillFile {
+    name: string;
+    relative_path: string;
+    size: number;
+    is_dir: boolean;
+}
+
 export interface SavedProvider {
     name: string;
     base_url: string;

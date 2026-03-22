@@ -149,6 +149,7 @@ pub fn run() {
             agents::update_agent,
             agents::delete_agent,
             agents::list_skills,
+            agents::get_skill_detail,
             agents::list_available_models,
             agents::list_sessions,
             agents::rename_session,

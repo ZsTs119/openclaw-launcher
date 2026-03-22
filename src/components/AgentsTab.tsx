@@ -10,11 +10,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle, History, SquarePlus } from "lucide-react";
+import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle, History, SquarePlus, Eye, Folder, FileText } from "lucide-react";
 import { motion } from "framer-motion";
 import { Modal } from "./ui/Modal";
 import { CustomDropdown } from "./ui/CustomDropdown";
-import type { AgentInfo, AgentDetail, SkillInfo, AvailableModel, SessionInfo } from "../types";
+import type { AgentInfo, AgentDetail, SkillInfo, SkillFile, AvailableModel, SessionInfo } from "../types";
 import "../styles/agents.css";
 
 interface AgentsTabProps {
@@ -49,6 +49,11 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
     const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null);
     const [deleteCountdown, setDeleteCountdown] = useState(0);
     const [agentDeleteCountdown, setAgentDeleteCountdown] = useState(0);
+
+    // Skill detail modal state
+    const [showSkillDetail, setShowSkillDetail] = useState(false);
+    const [selectedSkill, setSelectedSkill] = useState<SkillInfo | null>(null);
+    const [skillFiles, setSkillFiles] = useState<SkillFile[]>([]);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -396,6 +401,19 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                     <span className="skill-path-hint" title={skill.path}>
                                         {skill.path.split(/[/\\]/).slice(-2).join("/")}
                                     </span>
+                                    <button
+                                        className="btn-ghost btn-skill-detail"
+                                        onClick={async () => {
+                                            setSelectedSkill(skill);
+                                            try {
+                                                const files = await invoke<SkillFile[]>("get_skill_detail", { skillPath: skill.path });
+                                                setSkillFiles(files);
+                                            } catch { setSkillFiles([]); }
+                                            setShowSkillDetail(true);
+                                        }}
+                                    >
+                                        <Eye size={12} strokeWidth={1.5} /> 详情
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -641,6 +659,38 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                         </button>
                     </div>
                 </div>
+            </Modal>
+
+            {/* Skill Detail Modal */}
+            <Modal show={showSkillDetail} onClose={() => setShowSkillDetail(false)} title={selectedSkill?.name || "技能详情"} maxWidth={520}>
+                {selectedSkill && (
+                    <div className="skill-detail">
+                        <div className="skill-detail-desc">{selectedSkill.description || "无描述"}</div>
+                        <div className="skill-detail-section">
+                            <h4 className="skill-detail-heading"><Folder size={14} strokeWidth={1.5} /> 文件结构</h4>
+                            <div className="skill-file-tree">
+                                {skillFiles.length === 0 ? (
+                                    <div className="skill-file-empty">无文件</div>
+                                ) : (
+                                    skillFiles.map((f) => (
+                                        <div key={f.relative_path} className={`skill-file-item ${f.is_dir ? "is-dir" : ""}`}
+                                            style={{ paddingLeft: `${(f.relative_path.split("/").length - 1) * 16 + 8}px` }}>
+                                            {f.is_dir
+                                                ? <Folder size={13} strokeWidth={1.5} className="file-icon dir" />
+                                                : <FileText size={13} strokeWidth={1.5} className="file-icon" />}
+                                            <span className="file-name">{f.name}</span>
+                                            {!f.is_dir && <span className="file-size">{f.size < 1024 ? `${f.size} B` : `${(f.size / 1024).toFixed(1)} KB`}</span>}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                        <div className="skill-detail-path">
+                            <span className="skill-detail-path-label">路径</span>
+                            <code>{selectedSkill.path}</code>
+                        </div>
+                    </div>
+                )}
             </Modal>
         </motion.div>
     );

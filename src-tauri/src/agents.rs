@@ -713,6 +713,74 @@ pub fn list_available_models() -> Result<Vec<AvailableModel>, String> {
     Ok(models)
 }
 
+/// A file or directory inside a skill
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SkillFile {
+    pub name: String,
+    pub relative_path: String,
+    pub size: u64,
+    pub is_dir: bool,
+}
+
+/// Get detailed info about a skill, including its file tree
+#[tauri::command]
+pub fn get_skill_detail(skill_path: String) -> Result<Vec<SkillFile>, String> {
+    let root = PathBuf::from(&skill_path);
+    if !root.exists() || !root.is_dir() {
+        return Err("Skill 目录不存在".to_string());
+    }
+
+    let mut files = Vec::new();
+    scan_skill_dir(&root, &root, &mut files, 0, 2);
+    files.sort_by(|a, b| {
+        // Directories first, then alphabetical
+        b.is_dir.cmp(&a.is_dir).then(a.relative_path.cmp(&b.relative_path))
+    });
+    Ok(files)
+}
+
+fn scan_skill_dir(root: &PathBuf, dir: &PathBuf, files: &mut Vec<SkillFile>, depth: usize, max_depth: usize) {
+    if depth > max_depth {
+        return;
+    }
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        // Skip hidden files and node_modules
+        if name.starts_with('.') || name == "node_modules" {
+            continue;
+        }
+
+        let relative = path.strip_prefix(root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .to_string();
+
+        if path.is_dir() {
+            files.push(SkillFile {
+                name: name.clone(),
+                relative_path: relative.clone(),
+                size: 0,
+                is_dir: true,
+            });
+            scan_skill_dir(root, &path, files, depth + 1, max_depth);
+        } else {
+            let size = path.metadata().map(|m| m.len()).unwrap_or(0);
+            files.push(SkillFile {
+                name,
+                relative_path: relative,
+                size,
+                is_dir: false,
+            });
+        }
+    }
+}
+
 #[tauri::command]
 pub fn list_skills() -> Result<Vec<SkillInfo>, String> {
     // Ensure built-in skills exist (idempotent, best-effort)
