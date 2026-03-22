@@ -161,10 +161,14 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
     };
 
     const handleNewChat = (agentName: string) => {
-        const ts = Date.now();
+        const newKey = `agent:${agentName}:chat-${Date.now()}`;
         openInBrowser((port) =>
-            `http://localhost:${port}/chat?session=${encodeURIComponent(`agent:${agentName}:chat-${ts}`)}`
+            `http://localhost:${port}/chat?session=${encodeURIComponent(newKey)}`
         );
+        // Update local state so "打开对话" immediately uses this new session
+        setAgents(prev => prev.map(a =>
+            a.name === agentName ? { ...a, last_chat_session_key: newKey } : a
+        ));
     };
 
     const handleHistory = async (agentName: string) => {
