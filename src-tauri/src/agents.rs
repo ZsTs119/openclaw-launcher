@@ -422,10 +422,15 @@ fn update_agent_permission(agent_id: &str, allow_agents: &[String]) -> Result<()
         if let Some(entry) = list.iter_mut().find(|a|
             a.get("id").and_then(|id| id.as_str()) == Some(agent_id)
         ) {
-            // Filter out self-reference
-            let cleaned: Vec<&String> = allow_agents.iter()
-                .filter(|a| a.as_str() != agent_id)
+            // Filter out self-reference, then auto-include "main"
+            let mut cleaned: Vec<&str> = allow_agents.iter()
+                .map(|s| s.as_str())
+                .filter(|a| *a != agent_id && *a != "main")
                 .collect();
+            // main is always callable (default escalation)
+            if !cleaned.contains(&"*") {
+                cleaned.insert(0, "main");
+            }
             entry["subagents"] = serde_json::json!({ "allowAgents": cleaned });
         }
     }

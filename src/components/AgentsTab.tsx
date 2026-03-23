@@ -471,7 +471,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                 <span>全部权限</span>
                             </label>
                             {!newAllowAgents.includes("*") && agents
-                                .filter(a => a.name !== newName.trim())
+                                .filter(a => a.name !== newName.trim() && a.name !== "main")
                                 .map(a => (
                                     <label key={a.name} className="perm-checkbox">
                                         <input
@@ -493,7 +493,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                         <span className="form-hint">
                             {newAllowAgents.includes("*")
                                 ? "可调用所有 Agent（包含未来新建的）"
-                                : `已选 ${newAllowAgents.length} 个 Agent`}
+                                : `已选 ${newAllowAgents.filter(n => n !== "main").length} 个 Agent（main 默认可回调）`}
                         </span>
                     </label>
                     {formError && <div className="form-error">{formError}</div>}
@@ -553,7 +553,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                     <span>全部权限</span>
                                 </label>
                                 {!newAllowAgents.includes("*") && agents
-                                    .filter(a => a.name !== selectedAgent?.name)
+                                    .filter(a => a.name !== selectedAgent?.name && a.name !== "main")
                                     .map(a => (
                                         <label key={a.name} className="perm-checkbox">
                                             <input
