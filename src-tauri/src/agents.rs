@@ -837,20 +837,31 @@ pub fn list_skills() -> Result<Vec<SkillInfo>, String> {
     // Ensure built-in skills exist (idempotent, best-effort)
     ensure_builtin_resources();
 
-    let dir = match skills_dir() {
-        Ok(d) => d,
-        Err(_) => return Ok(Vec::new()),
-    };
-
-    if !dir.exists() {
-        return Ok(Vec::new());
-    }
-
     let mut skills = Vec::new();
 
-    let entries = match fs::read_dir(&dir) {
+    // 1. Scan built-in skills dir
+    if let Ok(dir) = skills_dir() {
+        if dir.exists() {
+            scan_skills_dir(&dir, &mut skills);
+        }
+    }
+
+    // 2. Scan marketplace-skills dir
+    let home = dirs::home_dir().ok_or("无法获取 home 目录")?;
+    let marketplace_dir = home.join(".openclaw").join("marketplace-skills");
+    if marketplace_dir.exists() {
+        scan_skills_dir(&marketplace_dir, &mut skills);
+    }
+
+    skills.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(skills)
+}
+
+/// Scan a directory for skills (subdirs containing SKILL.md)
+fn scan_skills_dir(dir: &PathBuf, skills: &mut Vec<SkillInfo>) {
+    let entries = match fs::read_dir(dir) {
         Ok(e) => e,
-        Err(_) => return Ok(Vec::new()),
+        Err(_) => return,
     };
 
     for entry in entries.flatten() {
@@ -911,9 +922,6 @@ pub fn list_skills() -> Result<Vec<SkillInfo>, String> {
             path: entry.path().to_string_lossy().to_string(),
         });
     }
-
-    skills.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(skills)
 }
 
 // ─────────── Session History ───────────

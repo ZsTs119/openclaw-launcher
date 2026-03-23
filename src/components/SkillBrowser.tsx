@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Modal } from "./ui/Modal";
 import { Download, Check, Loader2, Store } from "lucide-react";
+import { CustomDropdown } from "./ui/CustomDropdown";
 import "../styles/skill-browser.css";
 
 interface RegistrySkill {
@@ -141,15 +142,12 @@ export function SkillBrowser({ show, onClose, onRefresh }: SkillBrowserProps) {
                         onChange={(e) => setSearch(e.target.value)}
                     />
                     {registry && (
-                        <select
-                            className="skill-browser-category"
+                        <CustomDropdown
+                            options={registry.categories.map(c => ({ value: c.id, label: c.name }))}
                             value={category}
-                            onChange={(e) => setCategory(e.target.value)}
-                        >
-                            {registry.categories.map(c => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                        </select>
+                            onChange={(v) => setCategory(v)}
+                            placeholder="全部"
+                        />
                     )}
                 </div>
 
