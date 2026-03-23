@@ -64,24 +64,37 @@
 
 ### 现状 → 目标
 - 现状：`is_supervisor` toggle → `["*"]` 或 `["main"]`
-- 目标：多选 checkbox → 动态读取 agent 列表
+- 目标：多选 checkbox → 动态读取 agent 列表 → `["main", "coder"]`
 
-### UI
-编辑弹窗中：
-- 勾选「全部权限 (*)」→ `["*"]`
-- 取消全选 → 显示所有 agent checkbox（排除自己）
-- 勾选具体 agent → `["main", "coder"]`
+### 规则
+- `["*"]` = 全部权限（包含未来新建的 agent）
+- `[]` = 无权限，agent 独立工作
+- `main` **始终 `["*"]`**，UI 不可修改
+- Agent 的 `allowAgents` 不可包含自己（UI 排除 + 后端过滤）
 
-### 改动文件
-| 文件 | 操作 |
+### Rust 后端改动
+
+| 函数 | 改动 |
 |---|---|
-| `agents.rs` | `AgentInfo` +`allow_agents`，`update_agent_permission` 改签名 |
-| `types/index.ts` | `AgentInfo` +`allow_agents` |
-| `AgentsTab.tsx` | 编辑弹窗改 toggle → checkbox 列表 |
+| `AgentInfo` | 新增 `allow_agents: Vec<String>`，保留 `is_supervisor` 为计算字段 |
+| `update_agent_permission` | `(id, bool)` → `(id, Vec<String>)`，main 保护 |
+| `add_to_agents_list` | `bool` → `Vec<String>` |
+| `create_agent` | `is_supervisor: Option<bool>` → `allow_agents: Option<Vec<String>>` |
+| `update_agent` | 同上 |
+| `remove_from_agents_list` | **新增级联清理**：删 B → 遍历其他 agent 的 allowAgents 移除 "B" |
 
-### 边界
-- 删除 agent → 其他 agent `allowAgents` 自动清除该 id
-- `main` 默认 `["*"]`，新 agent 默认 `["main"]`
+### 前端改动
+
+| 组件 | 改动 |
+|---|---|
+| `types/index.ts` | `AgentInfo` + `allow_agents: string[]` |
+| `AgentsTab.tsx` 编辑弹窗 | toggle → 「全部权限」checkbox + agent 列表 checkbox |
+| `AgentsTab.tsx` 创建弹窗 | 同上（默认 `["main"]`） |
+
+### 边界处理
+- 删 Agent B → A 的 `allowAgents` 含 B → 自动移除 B（若变 `[]` → 合理）
+- 老版 config 无 `allowAgents` → 已有默认值处理（main→`["*"]`，其他→`["main"]`）
+- 不影响：Dashboard、AI引擎、数据统计、设置中心、会话路由、服务启停
 
 ---
 
