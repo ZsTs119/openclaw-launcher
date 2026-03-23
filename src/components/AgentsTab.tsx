@@ -36,7 +36,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
     const [newName, setNewName] = useState("");
     const [newModel, setNewModel] = useState("");
     const [newPrompt, setNewPrompt] = useState("");
-    const [newSupervisor, setNewSupervisor] = useState(false);
+    const [newAllowAgents, setNewAllowAgents] = useState<string[]>(["main"]);
     const [formError, setFormError] = useState("");
     const [saving, setSaving] = useState(false);
 
@@ -79,7 +79,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
         setNewName("");
         setNewModel("");
         setNewPrompt("");
-        setNewSupervisor(false);
+        setNewAllowAgents(["main"]);
         setFormError("");
     };
 
@@ -95,7 +95,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                 name: newName.trim(),
                 model: newModel || null,
                 systemPrompt: newPrompt.trim() || null,
-                isSupervisor: newSupervisor,
+                allowAgents: newAllowAgents,
             });
             setShowCreate(false);
             resetForm();
@@ -112,7 +112,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
             const detail = await invoke<AgentDetail>("get_agent_detail", { name });
             setSelectedAgent(detail);
             setNewPrompt(detail.system_prompt || "");
-            setNewSupervisor(detail.is_supervisor);
+            setNewAllowAgents(detail.allow_agents || ["main"]);
             // Use model_ref (raw "provider/model_id") for dropdown pre-selection
             setNewModel(detail.model_ref || "");
             setShowEdit(true);
@@ -130,7 +130,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                 name: selectedAgent.name,
                 systemPrompt: newPrompt.trim() || null,
                 model: newModel || null,
-                isSupervisor: newSupervisor,
+                allowAgents: newAllowAgents,
             });
             setShowEdit(false);
             setSelectedAgent(null);
@@ -363,6 +363,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                                 has_sessions: agent.has_sessions,
                                                 is_default: agent.is_default,
                                                 is_supervisor: false,
+                                                allow_agents: [],
                                             });
                                             setAgentDeleteCountdown(3);
                                             setShowDelete(true);
@@ -452,26 +453,47 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                         />
                         <span className="form-hint">写入 workspace 的 SOUL.md，控制 Agent 人设和边界</span>
                     </label>
-                    <label className="form-label form-toggle-label">
-                        <span>权限级别</span>
-                        <div className="form-toggle-row">
-                            <button
-                                type="button"
-                                className={`form-toggle-btn ${!newSupervisor ? "active" : ""}`}
-                                onClick={() => setNewSupervisor(false)}
-                            >
-                                下属
-                            </button>
-                            <button
-                                type="button"
-                                className={`form-toggle-btn ${newSupervisor ? "active" : ""}`}
-                                onClick={() => setNewSupervisor(true)}
-                            >
-                                主管
-                            </button>
+                    <label className="form-label">
+                        <span>可调用的 Agent</span>
+                        <div className="perm-checkbox-group">
+                            <label className="perm-checkbox">
+                                <input
+                                    type="checkbox"
+                                    checked={newAllowAgents.includes("*")}
+                                    onChange={(e) => {
+                                        if (e.target.checked) {
+                                            setNewAllowAgents(["*"]);
+                                        } else {
+                                            setNewAllowAgents(["main"]);
+                                        }
+                                    }}
+                                />
+                                <span>全部权限</span>
+                            </label>
+                            {!newAllowAgents.includes("*") && agents
+                                .filter(a => a.name !== newName.trim())
+                                .map(a => (
+                                    <label key={a.name} className="perm-checkbox">
+                                        <input
+                                            type="checkbox"
+                                            checked={newAllowAgents.includes(a.name)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setNewAllowAgents([...newAllowAgents, a.name]);
+                                                } else {
+                                                    setNewAllowAgents(newAllowAgents.filter(n => n !== a.name));
+                                                }
+                                            }}
+                                        />
+                                        <span>{a.name}</span>
+                                    </label>
+                                ))
+                            }
                         </div>
                         <span className="form-hint">
-                            {newSupervisor ? "可调用所有 Agent（适用于管理角色）" : "只能回调 main Agent（适用于专业角色）"}
+                            {newAllowAgents.includes("*")
+                                ? "可调用所有 Agent（包含未来新建的）"
+                                : `已选 ${newAllowAgents.length} 个 Agent`}
                         </span>
                     </label>
                     {formError && <div className="form-error">{formError}</div>}
@@ -507,28 +529,56 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                         />
                         <span className="form-hint">写入 SOUL.md — 每次对话开始时注入到 Agent 上下文</span>
                     </label>
-                    <label className="form-label form-toggle-label">
-                        <span>权限级别</span>
-                        <div className="form-toggle-row">
-                            <button
-                                type="button"
-                                className={`form-toggle-btn ${!newSupervisor ? "active" : ""}`}
-                                onClick={() => setNewSupervisor(false)}
-                            >
-                                下属
-                            </button>
-                            <button
-                                type="button"
-                                className={`form-toggle-btn ${newSupervisor ? "active" : ""}`}
-                                onClick={() => setNewSupervisor(true)}
-                            >
-                                主管
-                            </button>
-                        </div>
-                        <span className="form-hint">
-                            {newSupervisor ? "可调用所有 Agent" : "只能回调 main Agent"}
-                        </span>
-                    </label>
+                    {selectedAgent?.is_default ? (
+                        <label className="form-label">
+                            <span>可调用的 Agent</span>
+                            <div className="perm-readonly">默认全部权限（main 不可修改）</div>
+                        </label>
+                    ) : (
+                        <label className="form-label">
+                            <span>可调用的 Agent</span>
+                            <div className="perm-checkbox-group">
+                                <label className="perm-checkbox">
+                                    <input
+                                        type="checkbox"
+                                        checked={newAllowAgents.includes("*")}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setNewAllowAgents(["*"]);
+                                            } else {
+                                                setNewAllowAgents(["main"]);
+                                            }
+                                        }}
+                                    />
+                                    <span>全部权限</span>
+                                </label>
+                                {!newAllowAgents.includes("*") && agents
+                                    .filter(a => a.name !== selectedAgent?.name)
+                                    .map(a => (
+                                        <label key={a.name} className="perm-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                checked={newAllowAgents.includes(a.name)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setNewAllowAgents([...newAllowAgents, a.name]);
+                                                    } else {
+                                                        setNewAllowAgents(newAllowAgents.filter(n => n !== a.name));
+                                                    }
+                                                }}
+                                            />
+                                            <span>{a.name}</span>
+                                        </label>
+                                    ))
+                                }
+                            </div>
+                            <span className="form-hint">
+                                {newAllowAgents.includes("*")
+                                    ? "可调用所有 Agent"
+                                    : `已选 ${newAllowAgents.length} 个 Agent`}
+                            </span>
+                        </label>
+                    )}
                     {formError && <div className="form-error">{formError}</div>}
                     <div className="form-actions">
                         <button className="btn-secondary" onClick={() => setShowEdit(false)}>取消</button>

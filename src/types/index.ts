@@ -27,6 +27,8 @@ export interface AgentInfo {
     is_default: boolean;
     model_valid: boolean;
     last_chat_session_key: string | null;
+    allow_agents: string[];
+    is_supervisor: boolean;
 }
 
 export interface SessionInfo {
@@ -49,6 +51,7 @@ export interface AgentDetail {
     has_sessions: boolean;
     is_default: boolean;
     is_supervisor: boolean;
+    allow_agents: string[];
 }
 
 export interface AvailableModel {

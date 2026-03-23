@@ -21,6 +21,10 @@ pub struct AgentInfo {
     pub model_valid: bool,
     /// The session key of the last interactive chat session (non-cron, non-heartbeat)
     pub last_chat_session_key: Option<String>,
+    /// Which agents this agent can delegate to. ["*"] = all.
+    pub allow_agents: Vec<String>,
+    /// Computed: true if allow_agents contains "*"
+    pub is_supervisor: bool,
 }
 
 /// Detail for a single agent
@@ -35,6 +39,7 @@ pub struct AgentDetail {
     pub has_sessions: bool,
     pub is_default: bool,
     pub is_supervisor: bool,
+    pub allow_agents: Vec<String>,
 }
 
 /// Available model for dropdown
@@ -163,8 +168,8 @@ fn is_provider_valid(config: &serde_json::Value, provider_name: &str) -> bool {
         .is_some()
 }
 
-/// Check if agent is a supervisor (allowAgents: ["*"]) from agents.list[]
-fn is_agent_supervisor(config: &serde_json::Value, agent_id: &str) -> bool {
+/// Read allowAgents array from agents.list[] for a given agent
+fn get_allow_agents(config: &serde_json::Value, agent_id: &str) -> Vec<String> {
     config.get("agents")
         .and_then(|a| a.get("list"))
         .and_then(|l| l.as_array())
@@ -172,8 +177,8 @@ fn is_agent_supervisor(config: &serde_json::Value, agent_id: &str) -> bool {
         .and_then(|a| a.get("subagents"))
         .and_then(|s| s.get("allowAgents"))
         .and_then(|aa| aa.as_array())
-        .map(|arr| arr.iter().any(|v| v.as_str() == Some("*")))
-        .unwrap_or(agent_id == "main") // main defaults to supervisor
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+        .unwrap_or_else(|| if agent_id == "main" { vec!["*".to_string()] } else { vec!["main".to_string()] })
 }
 
 /// Update model field in agents.list[] entry in openclaw.json
@@ -333,7 +338,7 @@ pub fn ensure_builtin_resources() {
 }
 
 /// Add an agent entry to agents.list[] in openclaw.json
-fn add_to_agents_list(agent_id: &str, workspace: &str, is_supervisor: bool, model: Option<&str>) -> Result<(), String> {
+fn add_to_agents_list(agent_id: &str, workspace: &str, allow_agents: &[String], model: Option<&str>) -> Result<(), String> {
     let mut config = read_config()?;
 
     // Ensure agents.list exists
@@ -353,12 +358,6 @@ fn add_to_agents_list(agent_id: &str, workspace: &str, is_supervisor: bool, mode
     );
 
     if !already_exists {
-        let allow_agents = if is_supervisor {
-            serde_json::json!(["*"])
-        } else {
-            serde_json::json!(["main"])
-        };
-
         let mut entry = serde_json::json!({
             "id": agent_id,
             "workspace": workspace,
@@ -380,7 +379,8 @@ fn add_to_agents_list(agent_id: &str, workspace: &str, is_supervisor: bool, mode
     write_config(&config)
 }
 
-/// Remove an agent entry from agents.list[] in openclaw.json
+/// Remove an agent entry from agents.list[] in openclaw.json.
+/// Also cascade-cleans: removes the deleted agent's ID from other agents' allowAgents.
 fn remove_from_agents_list(agent_id: &str) -> Result<(), String> {
     let mut config = read_config()?;
 
@@ -388,14 +388,31 @@ fn remove_from_agents_list(agent_id: &str) -> Result<(), String> {
         .and_then(|a| a.get_mut("list"))
         .and_then(|l| l.as_array_mut())
     {
+        // 1. Remove the agent itself
         list.retain(|a| a.get("id").and_then(|id| id.as_str()) != Some(agent_id));
+
+        // 2. Cascade: remove deleted agent from other agents' allowAgents
+        for entry in list.iter_mut() {
+            if let Some(aa) = entry.get_mut("subagents")
+                .and_then(|s| s.get_mut("allowAgents"))
+                .and_then(|a| a.as_array_mut())
+            {
+                aa.retain(|v| v.as_str() != Some(agent_id));
+            }
+        }
     }
 
     write_config(&config)
 }
 
-/// Update an agent's permission in agents.list[]
-fn update_agent_permission(agent_id: &str, is_supervisor: bool) -> Result<(), String> {
+/// Update an agent's allowAgents permission in agents.list[].
+/// main is always ["*"] — this function is a no-op for main.
+fn update_agent_permission(agent_id: &str, allow_agents: &[String]) -> Result<(), String> {
+    // main protection: always ["*"]
+    if agent_id == "main" {
+        return Ok(());
+    }
+
     let mut config = read_config()?;
 
     if let Some(list) = config.get_mut("agents")
@@ -405,12 +422,11 @@ fn update_agent_permission(agent_id: &str, is_supervisor: bool) -> Result<(), St
         if let Some(entry) = list.iter_mut().find(|a|
             a.get("id").and_then(|id| id.as_str()) == Some(agent_id)
         ) {
-            let allow_agents = if is_supervisor {
-                serde_json::json!(["*"])
-            } else {
-                serde_json::json!(["main"])
-            };
-            entry["subagents"] = serde_json::json!({ "allowAgents": allow_agents });
+            // Filter out self-reference
+            let cleaned: Vec<&String> = allow_agents.iter()
+                .filter(|a| a.as_str() != agent_id)
+                .collect();
+            entry["subagents"] = serde_json::json!({ "allowAgents": cleaned });
         }
     }
 
@@ -506,6 +522,9 @@ pub fn list_agents() -> Result<Vec<AgentInfo>, String> {
             .map(|p| is_provider_valid(&config, p))
             .unwrap_or(true); // No model set = valid (just empty)
 
+        let allow_agents = get_allow_agents(&config, &name);
+        let is_supervisor = allow_agents.contains(&"*".to_string());
+
         agents.push(AgentInfo {
             is_default: name == "main",
             name,
@@ -513,6 +532,8 @@ pub fn list_agents() -> Result<Vec<AgentInfo>, String> {
             has_sessions,
             model_valid,
             last_chat_session_key,
+            allow_agents,
+            is_supervisor,
         });
     }
 
@@ -547,7 +568,8 @@ pub fn get_agent_detail(name: String) -> Result<AgentDetail, String> {
         .map(|s| s.to_string());
     let system_prompt = extract_system_prompt(&name);
     let has_sessions = count_active_sessions(&agent_path.join("sessions")) > 0;
-    let is_supervisor = is_agent_supervisor(&config, &name);
+    let allow_agents = get_allow_agents(&config, &name);
+    let is_supervisor = allow_agents.contains(&"*".to_string());
 
     Ok(AgentDetail {
         is_default: name == "main",
@@ -558,6 +580,7 @@ pub fn get_agent_detail(name: String) -> Result<AgentDetail, String> {
         system_prompt,
         has_sessions,
         is_supervisor,
+        allow_agents,
     })
 }
 
@@ -566,17 +589,8 @@ pub fn create_agent(
     name: String,
     model: Option<String>,
     system_prompt: Option<String>,
-    is_supervisor: Option<bool>,
+    allow_agents: Option<Vec<String>>,
 ) -> Result<(), String> {
-    // Validate name
-    let name_re = regex_lite::Regex::new(r"^[a-z0-9][a-z0-9-]{0,31}$").unwrap();
-    if !name_re.is_match(&name) {
-        return Err("Agent 名称只能包含小写字母、数字和连字符，1-32 字符".to_string());
-    }
-    if name == "main" {
-        return Err("不能创建名为 'main' 的 Agent".to_string());
-    }
-
     let dir = agents_dir()?;
     let agent_path = dir.join(&name);
 
@@ -584,25 +598,31 @@ pub fn create_agent(
         return Err(format!("Agent '{}' 已存在", name));
     }
 
-    // 1. Create agent directory structure
-    let agent_dir = agent_path.join("agent");
-    fs::create_dir_all(&agent_dir).map_err(|e| format!("创建目录失败: {}", e))?;
-
-    // 2. Create workspace with bootstrap files
-    let ws = workspace_path(&name)?;
-    create_bootstrap_files(&ws)?;
-
-    // 3. Write system prompt to workspace SOUL.md (this is what the gateway reads)
-    if let Some(prompt) = system_prompt {
-        fs::write(
-            ws.join("SOUL.md"),
-            &prompt,
-        ).map_err(|e| format!("写入系统提示词失败: {}", e))?;
+    if name.is_empty() || name.contains('.') || name.contains('/') || name.contains('\\') {
+        return Err("Agent 名称无效".to_string());
     }
 
-    // 4. Sync to openclaw.json agents.list[] (with model)
-    let supervisor = is_supervisor.unwrap_or(false);
-    add_to_agents_list(&name, &ws.to_string_lossy(), supervisor, model.as_deref())?;
+    // Create agent directory structure
+    let agent_dir = agent_path.join("agent");
+    fs::create_dir_all(&agent_dir)
+        .map_err(|e| format!("创建 Agent 目录失败: {}", e))?;
+
+    // Create workspace
+    let ws = workspace_path(&name)?;
+    fs::create_dir_all(&ws).map_err(|e| format!("创建 workspace 失败: {}", e))?;
+
+    // Write system prompt (SOUL.md in workspace)
+    if let Some(prompt) = system_prompt {
+        fs::write(ws.join("SOUL.md"), &prompt)
+            .map_err(|e| format!("写入系统提示词失败: {}", e))?;
+    }
+
+    // Create bootstrap files (AGENTS.md, USER.md, OPENCLAW.md)
+    create_bootstrap_files(&ws)?;
+
+    // Add to openclaw.json agents.list
+    let agents = allow_agents.unwrap_or_else(|| vec!["main".to_string()]);
+    add_to_agents_list(&name, &ws.to_string_lossy(), &agents, model.as_deref())?;
 
     Ok(())
 }
@@ -612,7 +632,7 @@ pub fn update_agent(
     name: String,
     system_prompt: Option<String>,
     model: Option<String>,
-    is_supervisor: Option<bool>,
+    allow_agents: Option<Vec<String>>,
 ) -> Result<(), String> {
     let dir = agents_dir()?;
     let agent_path = dir.join(&name);
@@ -639,8 +659,8 @@ pub fn update_agent(
     }
 
     // Update permission
-    if let Some(supervisor) = is_supervisor {
-        update_agent_permission(&name, supervisor)?;
+    if let Some(agents) = allow_agents {
+        update_agent_permission(&name, &agents)?;
     }
 
     Ok(())
