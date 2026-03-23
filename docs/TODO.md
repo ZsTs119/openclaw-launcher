@@ -198,13 +198,18 @@
 ### 🔧 Phase 8.5: 权限图 + 内置技能 + ClawHub 浏览 → `v0.6.0`
 
 #### 8.5.1 自动迁移 + 内置技能
-- [ ] Rust `ensure_builtin_resources()` 核心函数
-- [ ] OPENCLAW.md 自动写入每个 agent workspace
-- [ ] 内置技能安装（bomb-dog-sniff + agent-reach）
-- [ ] 调用点 1: `setup_openclaw()` Step 5 后（新用户）
-- [ ] 调用点 2: `start_service()` 成功后（老用户升级）
-- [ ] 调用点 3: `create_agent()` 后（新 agent）
-- [ ] 调用点 4: 一键修复流程
+- [x] Rust `ensure_builtin_resources()` 核心函数 ✅
+- [x] OPENCLAW.md 自动写入每个 agent workspace ✅
+- [x] 内置技能安装（bomb-dog-sniff + agent-reach + awesome-skills + awesome-usecases）✅
+- [x] 调用点 1: `setup_openclaw()` Step 6（新用户）✅
+- [x] 调用点 2: `start_service()` 成功后（老用户升级）✅
+- [x] 调用点 3: `create_agent()` 后（新 agent）✅
+- [x] 调用点 4: `list_skills()` 调用时（即时生效）✅
+- [x] YAML `>` 折叠描述解析修复 ✅
+- [x] 技能卡片重设计（图标 + 描述 + 路径 + hover 放大）✅
+- [x] `SkillDetailModal.tsx` 分屏布局（信息 + 目录树 + 文件预览）✅
+- [x] `FileTree.tsx` 通用可收缩/展开文件目录树组件 ✅
+- [x] `read_skill_file` Rust 命令（安全限制 + 100KB）✅
 
 #### 8.5.2 Agent 权限图
 - [ ] Rust `AgentInfo` 新增 `allow_agents` 字段

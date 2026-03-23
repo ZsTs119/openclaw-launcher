@@ -1,6 +1,7 @@
 # Phase 8.5: 权限图 + 内置技能 + ClawHub 技能浏览
 
-> 📋 待开发 | 目标版本：`v0.6.0`
+> 📋 开发中 | 目标版本：`v0.6.0`
+> Module B ✅ 已完成 | Module A 待开发 | Module C 待开发
 
 ## 铁律
 
@@ -11,41 +12,51 @@
 
 ---
 
-## 8.5.1 自动迁移 + 内置技能 (Module B)
+## 8.5.1 自动迁移 + 内置技能 (Module B) ✅
 
 ### `ensure_builtin_resources()` 核心函数
 
-4 个调用入口：
+调用入口（已实现）：
 
-| 入口 | 场景 |
-|---|---|
-| `setup_openclaw()` Step 5 后 | 新用户首次安装 |
-| `start_service()` 启动成功后 | 老用户升级安装包 |
-| `create_agent()` 创建 agent 后 | 新 agent workspace |
-| 一键修复 | 手动触发 |
-
-### 内置技能
-
-| 名称 | 安装方式 | 说明 |
+| 入口 | 场景 | 状态 |
 |---|---|---|
-| bomb-dog-sniff | `skill install LvcidPsyche/skill-bomb-dog-sniff` | 恶意代码检测 |
-| agent-reach | `skill install Panniantong/agent-reach` | 联网搜索 |
-| awesome-skills | OPENCLAW.md 链接 | 技能合集索引 |
-| awesome-usecases | OPENCLAW.md 链接 | 用例合集索引 |
+| `setup_openclaw()` Step 6 | 新用户首次安装 | ✅ |
+| `start_service()` 启动成功后 | 老用户升级安装包 | ✅ |
+| `create_agent()` → `create_bootstrap_files()` | 新 agent workspace | ✅ |
+| `list_skills()` 首次调用 | 即时生效，不需启动服务 | ✅ |
 
-### OPENCLAW.md
+### 内置技能（4个，通过 include_str! 嵌入二进制）
 
-每个 agent workspace 根目录自动创建，gateway 每次请求读取。
-- 不存在 → 写入
-- 已存在 → **不覆盖**（尊重用户修改）
-- 断网安装失败 → 静默跳过，下次启动重试
+| 名称 | 说明 |
+|---|---|
+| bomb-dog-sniff | 恶意代码检测 |
+| agent-reach | 联网搜索 |
+| awesome-openclaw-skills | 技能合集索引 |
+| awesome-openclaw-usecases | 用例合集索引 |
+
+### 技能卡片 + 详情弹窗
+
+| 功能 | 状态 |
+|---|---|
+| YAML `>` 折叠描述解析 | ✅ |
+| 卡片：图标 + 描述 + 路径 + hover 放大 | ✅ |
+| `SkillDetailModal.tsx` 分屏布局 | ✅ |
+| `FileTree.tsx` 通用可收缩目录树 | ✅ |
+| `read_skill_file` 安全读取（限 skills 目录 + 100KB）| ✅ |
 
 ### 改动文件
+
 | 文件 | 操作 |
 |---|---|
-| `agents.rs` | 新增 `ensure_builtin_resources()` |
-| `setup.rs` | Step 5 后调用 |
+| `agents.rs` | `ensure_builtin_resources()` + `get_skill_detail` + `read_skill_file` |
+| `setup.rs` | Step 6 调用 |
 | `service.rs` | 启动后调用 |
+| `lib.rs` | 注册 3 个新命令 |
+| `types/index.ts` | `SkillFile` 类型 |
+| `SkillDetailModal.tsx` | [NEW] 分屏弹窗 |
+| `ui/FileTree.tsx` | [NEW] 通用文件树组件 |
+| `skill-detail.css` | [NEW] 弹窗样式 |
+| `agents.css` | 卡片 hover 放大 |
 
 ---
 
@@ -91,27 +102,18 @@
 | `SkillBrowser.tsx` | 弹窗：搜索 + 结果列表 + 安装按钮 |
 | `skill-browser.css` | 弹窗样式 |
 
-### UI
-- AgentsTab 技能区 → 「探索技能」按钮 → 打开 SkillBrowser
-- 搜索 → 调 Rust → 渲染结果
-- 安装 → 调 Rust → 刷新本地列表
-
 ---
-
-## 实施顺序
-
-1. Module B（内置技能 + OPENCLAW.md + 迁移）
-2. Module A（权限图）
-3. Module C（ClawHub 浏览器）
 
 ## 验收标准
 
 ```
-[ ] 新用户安装后自动有 OPENCLAW.md + 2 个内置技能
-[ ] 老用户升级后启动自动补装（静默）
-[ ] 新建 agent → workspace 有 OPENCLAW.md
+[x] 新用户安装后自动有 OPENCLAW.md + 4 个内置技能
+[x] 老用户升级后启动自动补装（静默）
+[x] 新建 agent → workspace 有 OPENCLAW.md
+[x] 技能卡片显示描述 + hover 放大 + 详情弹窗
+[x] 详情弹窗：分屏目录树 + 文件预览
+[x] cargo check + tsc 通过
 [ ] 编辑 agent → 可多选"可指挥的 agent"
 [ ] 删除 agent → 权限列表自动刷新
 [ ] 探索技能 → 搜索结果 → 一键安装
-[ ] cargo check + tsc 通过
 ```
