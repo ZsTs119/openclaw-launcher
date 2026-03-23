@@ -98,22 +98,44 @@
 
 ---
 
-## 8.5.3 ClawHub 技能浏览器 (Module C)
+## 8.5.3 技能市场 (Module C)
 
 ### 方案
-调用 OpenClaw CLI `skill search`/`skill install`，不做网页抓取。
+自建 JSON 注册表（`docs/skills-registry.json`）+ GitHub raw API 下载。
+MVP 27 个精选技能（Anthropic 官方 14 个 + 社区 13 个），7 个分类。
 
-### Rust 新增
+### 数据存储
+
+| 目录 | 内容 |
+|---|---|
+| `.agents/skills/` | 内置技能（始终可见） |
+| `~/.openclaw/marketplace-skills/{slug}/` | 市场下载的技能（中央存储） |
+
+### Rust 新增命令
+
 | 命令 | 说明 |
 |---|---|
-| `search_clawhub_skills(query)` | 执行 CLI search 解析输出 |
-| `install_clawhub_skill(slug)` | 执行 CLI install |
+| `fetch_skill_registry` | 从 GitHub 拉取 `skills-registry.json` |
+| `download_marketplace_skill(slug, repo, path)` | 从 GitHub raw API 下载到 `marketplace-skills/` |
+| `uninstall_marketplace_skill(slug)` | 删除中央目录 |
+| `list_marketplace_skills` | 列出已下载的市场技能 |
 
 ### 前端新增
+
 | 组件 | 说明 |
 |---|---|
-| `SkillBrowser.tsx` | 弹窗：搜索 + 结果列表 + 安装按钮 |
+| `SkillBrowser.tsx` | 弹窗：搜索 + 分类筛选 + 下载/已下载状态 |
 | `skill-browser.css` | 弹窗样式 |
+
+### UI 入口
+「已安装技能」标题栏右侧 → 「技能市场」按钮 → 打开 SkillBrowser
+
+### 边界处理
+- 无网络 → 错误提示
+- 已下载 → 按钮变「已下载」灰色
+- 下载失败 → toast + 清理半成品目录
+- 名称冲突 → 安装前检查
+- Windows 兼容 → 目录复制（非 symlink）
 
 ---
 

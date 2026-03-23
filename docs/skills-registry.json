@@ -1,0 +1,424 @@
+{
+    "version": 1,
+    "updated": "2026-03-23",
+    "skills": [
+        {
+            "slug": "docx",
+            "name": "Word 文档处理",
+            "description": "创建、编辑和分析 Word 文档，支持修订标记、批注、格式保持和文本提取",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/docx",
+            "category": "document",
+            "tags": [
+                "文档",
+                "office",
+                "word"
+            ]
+        },
+        {
+            "slug": "pdf",
+            "name": "PDF 工具箱",
+            "description": "全面的 PDF 处理工具：提取文本和表格、创建新 PDF、合并/拆分文档、处理表单",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/pdf",
+            "category": "document",
+            "tags": [
+                "文档",
+                "pdf",
+                "office"
+            ]
+        },
+        {
+            "slug": "pptx",
+            "name": "PPT 演示文稿",
+            "description": "创建、编辑和分析 PowerPoint 演示文稿，支持布局、模板、图表和自动生成幻灯片",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/pptx",
+            "category": "document",
+            "tags": [
+                "文档",
+                "ppt",
+                "演示"
+            ]
+        },
+        {
+            "slug": "xlsx",
+            "name": "Excel 电子表格",
+            "description": "创建、编辑和分析 Excel 表格，支持公式、格式、数据分析和可视化",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/xlsx",
+            "category": "document",
+            "tags": [
+                "文档",
+                "excel",
+                "数据"
+            ]
+        },
+        {
+            "slug": "algorithmic-art",
+            "name": "算法艺术生成",
+            "description": "使用 p5.js 创建生成艺术，支持种子随机、流场和粒子系统",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/algorithmic-art",
+            "category": "creative",
+            "tags": [
+                "艺术",
+                "创意",
+                "p5js",
+                "生成"
+            ]
+        },
+        {
+            "slug": "canvas-design",
+            "name": "Canvas 设计",
+            "description": "使用设计哲学理念创建精美的视觉艺术，输出 PNG 和 PDF 格式",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/canvas-design",
+            "category": "creative",
+            "tags": [
+                "设计",
+                "艺术",
+                "canvas"
+            ]
+        },
+        {
+            "slug": "slack-gif-creator",
+            "name": "Slack GIF 生成器",
+            "description": "创建适合 Slack 尺寸限制的动画 GIF",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/slack-gif-creator",
+            "category": "creative",
+            "tags": [
+                "gif",
+                "动画",
+                "slack"
+            ]
+        },
+        {
+            "slug": "frontend-design",
+            "name": "前端设计指南",
+            "description": "指导 AI 避免通用审美，做出大胆的设计决策。适用于 React + Tailwind 项目",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/frontend-design",
+            "category": "development",
+            "tags": [
+                "前端",
+                "设计",
+                "react",
+                "tailwind"
+            ]
+        },
+        {
+            "slug": "web-artifacts-builder",
+            "name": "Web 组件构建器",
+            "description": "使用 React、Tailwind CSS 和 shadcn/ui 组件构建复杂的 HTML 制品",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/web-artifacts-builder",
+            "category": "development",
+            "tags": [
+                "前端",
+                "react",
+                "shadcn",
+                "组件"
+            ]
+        },
+        {
+            "slug": "mcp-builder",
+            "name": "MCP 服务构建器",
+            "description": "创建高质量 MCP 服务的指南，用于集成外部 API 和服务",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/mcp-builder",
+            "category": "development",
+            "tags": [
+                "mcp",
+                "api",
+                "集成"
+            ]
+        },
+        {
+            "slug": "webapp-testing",
+            "name": "Web 应用测试",
+            "description": "使用 Playwright 测试本地 Web 应用，进行 UI 验证和调试",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/webapp-testing",
+            "category": "development",
+            "tags": [
+                "测试",
+                "playwright",
+                "自动化"
+            ]
+        },
+        {
+            "slug": "brand-guidelines",
+            "name": "品牌规范应用",
+            "description": "将 Anthropic 官方品牌颜色和排版应用到制品中",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/brand-guidelines",
+            "category": "communication",
+            "tags": [
+                "品牌",
+                "设计",
+                "排版"
+            ]
+        },
+        {
+            "slug": "internal-comms",
+            "name": "内部通讯写作",
+            "description": "撰写内部通讯，如状态报告、新闻简报和常见问题解答",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/internal-comms",
+            "category": "communication",
+            "tags": [
+                "写作",
+                "通讯",
+                "报告"
+            ]
+        },
+        {
+            "slug": "skill-creator",
+            "name": "技能创建器",
+            "description": "交互式技能创建工具，通过问答引导你构建新技能",
+            "author": "anthropics",
+            "repo": "https://github.com/anthropics/skills",
+            "path": "skills/skill-creator",
+            "category": "utility",
+            "tags": [
+                "工具",
+                "创建",
+                "技能"
+            ]
+        },
+        {
+            "slug": "playwright-skill",
+            "name": "Playwright 自动化",
+            "description": "使用 Playwright 进行浏览器自动化测试和网页交互",
+            "author": "lackeyjb",
+            "repo": "https://github.com/lackeyjb/playwright-skill",
+            "path": "",
+            "category": "development",
+            "tags": [
+                "测试",
+                "浏览器",
+                "自动化"
+            ]
+        },
+        {
+            "slug": "claude-d3js-skill",
+            "name": "D3.js 数据可视化",
+            "description": "使用 D3.js 创建交互式数据可视化图表",
+            "author": "chrisvoncsefalvay",
+            "repo": "https://github.com/chrisvoncsefalvay/claude-d3js-skill",
+            "path": "",
+            "category": "development",
+            "tags": [
+                "可视化",
+                "d3",
+                "图表",
+                "数据"
+            ]
+        },
+        {
+            "slug": "claude-scientific-skills",
+            "name": "科学研究技能",
+            "description": "科学研究辅助技能集，支持论文分析、数据处理和实验设计",
+            "author": "K-Dense-AI",
+            "repo": "https://github.com/K-Dense-AI/claude-scientific-skills",
+            "path": "",
+            "category": "research",
+            "tags": [
+                "科研",
+                "论文",
+                "数据分析"
+            ]
+        },
+        {
+            "slug": "web-asset-generator",
+            "name": "Web 资源生成器",
+            "description": "快速生成 Web 开发所需的图片、图标和其他资源文件",
+            "author": "alonw0",
+            "repo": "https://github.com/alonw0/web-asset-generator",
+            "path": "",
+            "category": "development",
+            "tags": [
+                "前端",
+                "资源",
+                "图标"
+            ]
+        },
+        {
+            "slug": "ios-simulator-skill",
+            "name": "iOS 模拟器控制",
+            "description": "通过 Claude 控制 iOS 模拟器进行应用测试和调试",
+            "author": "conorluddy",
+            "repo": "https://github.com/conorluddy/ios-simulator-skill",
+            "path": "",
+            "category": "development",
+            "tags": [
+                "ios",
+                "移动端",
+                "测试"
+            ]
+        },
+        {
+            "slug": "ffuf-web-fuzzing",
+            "name": "Web 模糊测试",
+            "description": "使用 ffuf 进行 Web 安全模糊测试，发现隐藏路径和漏洞",
+            "author": "jthack",
+            "repo": "https://github.com/jthack/ffuf_claude_skill",
+            "path": "",
+            "category": "security",
+            "tags": [
+                "安全",
+                "渗透",
+                "模糊测试"
+            ]
+        },
+        {
+            "slug": "trailofbits-security",
+            "name": "安全审计工具集",
+            "description": "Trail of Bits 专业安全审计技能，用于代码安全分析",
+            "author": "trailofbits",
+            "repo": "https://github.com/trailofbits/skills",
+            "path": "",
+            "category": "security",
+            "tags": [
+                "安全",
+                "审计",
+                "代码分析"
+            ]
+        },
+        {
+            "slug": "expo-skills",
+            "name": "Expo 开发技能",
+            "description": "Expo React Native 开发技能集，加速移动应用构建",
+            "author": "expo",
+            "repo": "https://github.com/expo/skills",
+            "path": "",
+            "category": "development",
+            "tags": [
+                "移动端",
+                "react-native",
+                "expo"
+            ]
+        },
+        {
+            "slug": "frontend-slides",
+            "name": "前端幻灯片生成",
+            "description": "使用前端技术（HTML/CSS/JS）创建精美的演示文稿幻灯片",
+            "author": "zarazhangrui",
+            "repo": "https://github.com/zarazhangrui/frontend-slides",
+            "path": "",
+            "category": "creative",
+            "tags": [
+                "演示",
+                "幻灯片",
+                "前端"
+            ]
+        },
+        {
+            "slug": "loki-mode",
+            "name": "Loki 创意模式",
+            "description": "赋予 AI 更大胆、更有创意的对话风格和思维模式",
+            "author": "asklokesh",
+            "repo": "https://github.com/asklokesh/claudeskill-loki-mode",
+            "path": "",
+            "category": "communication",
+            "tags": [
+                "创意",
+                "对话",
+                "风格"
+            ]
+        },
+        {
+            "slug": "shadcn-ui",
+            "name": "shadcn/ui 组件库",
+            "description": "使用 shadcn/ui 组件库快速构建现代化 UI 界面",
+            "author": "shadcn",
+            "repo": "https://github.com/shadcn-ui/ui",
+            "path": "apps/www/content/docs/skills",
+            "category": "development",
+            "tags": [
+                "UI",
+                "组件",
+                "react",
+                "tailwind"
+            ]
+        },
+        {
+            "slug": "superpowers",
+            "name": "超能力技能库",
+            "description": "20+ 经过实战验证的核心技能：TDD、调试、协作模式、头脑风暴、计划执行",
+            "author": "obra",
+            "repo": "https://github.com/obra/superpowers",
+            "path": "",
+            "category": "utility",
+            "tags": [
+                "合集",
+                "TDD",
+                "调试",
+                "协作"
+            ]
+        },
+        {
+            "slug": "skill-seekers",
+            "name": "文档转技能工具",
+            "description": "将文档网站自动转换为 Claude Skills，快速创建知识技能",
+            "author": "yusufkaraaslan",
+            "repo": "https://github.com/yusufkaraaslan/Skill_Seekers",
+            "path": "",
+            "category": "utility",
+            "tags": [
+                "工具",
+                "文档",
+                "转换"
+            ]
+        }
+    ],
+    "categories": [
+        {
+            "id": "all",
+            "name": "全部"
+        },
+        {
+            "id": "document",
+            "name": "文档处理"
+        },
+        {
+            "id": "development",
+            "name": "开发工具"
+        },
+        {
+            "id": "creative",
+            "name": "设计创意"
+        },
+        {
+            "id": "security",
+            "name": "安全审计"
+        },
+        {
+            "id": "communication",
+            "name": "沟通写作"
+        },
+        {
+            "id": "research",
+            "name": "科研分析"
+        },
+        {
+            "id": "utility",
+            "name": "效率工具"
+        }
+    ]
+}
