@@ -1,0 +1,201 @@
+/* ─── Skill Browser Modal ─────────────────────── */
+
+.skill-browser-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 60vh;
+}
+
+/* Search + Filter row */
+.skill-browser-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.skill-browser-search {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.skill-browser-search:focus {
+    border-color: var(--accent-blue);
+}
+
+.skill-browser-search::placeholder {
+    color: var(--text-muted);
+}
+
+.skill-browser-category {
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    outline: none;
+    min-width: 100px;
+}
+
+/* Skill list */
+.skill-browser-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+    max-height: 45vh;
+    padding-right: 4px;
+}
+
+.skill-browser-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.skill-browser-list::-webkit-scrollbar-thumb {
+    background: var(--border-subtle);
+    border-radius: 2px;
+}
+
+/* Skill card */
+.skill-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.skill-card:hover {
+    border-color: var(--accent-blue);
+    background: rgba(var(--accent-blue-rgb, 96, 165, 250), 0.05);
+}
+
+.skill-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.skill-card-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.skill-card-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.skill-card-meta {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.skill-card-tag {
+    font-size: 10px;
+    padding: 1px 6px;
+    background: rgba(var(--accent-blue-rgb, 96, 165, 250), 0.1);
+    color: var(--accent-blue);
+    border-radius: 3px;
+}
+
+.skill-card-author {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* Action button */
+.skill-card-action {
+    flex-shrink: 0;
+}
+
+.skill-download-btn {
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid var(--accent-blue);
+    background: transparent;
+    color: var(--accent-blue);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.skill-download-btn:hover:not(:disabled) {
+    background: var(--accent-blue);
+    color: #fff;
+}
+
+.skill-download-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.skill-download-btn.installed {
+    border-color: var(--text-muted);
+    color: var(--text-muted);
+    cursor: default;
+}
+
+.skill-download-btn.downloading {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+    cursor: wait;
+}
+
+/* Empty / loading / error states */
+.skill-browser-empty,
+.skill-browser-loading,
+.skill-browser-error {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.skill-browser-error {
+    color: var(--accent-red, #ef4444);
+}
+
+/* Market button in agents tab */
+.skill-market-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.skill-market-btn:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}

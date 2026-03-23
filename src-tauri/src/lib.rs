@@ -7,6 +7,7 @@ mod diagnostics;
 mod download;
 mod environment;
 mod installer;
+mod marketplace;
 mod paths;
 mod provider_mgr;
 mod providers;
@@ -161,6 +162,11 @@ pub fn run() {
             provider_mgr::delete_provider,
             provider_mgr::remove_model_from_provider,
             provider_mgr::add_model_to_provider,
+            // Marketplace
+            marketplace::fetch_skill_registry,
+            marketplace::download_marketplace_skill,
+            marketplace::uninstall_marketplace_skill,
+            marketplace::list_marketplace_skills,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

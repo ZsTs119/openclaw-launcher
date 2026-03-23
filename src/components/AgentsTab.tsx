@@ -15,6 +15,7 @@ import { motion } from "framer-motion";
 import { Modal } from "./ui/Modal";
 import { CustomDropdown } from "./ui/CustomDropdown";
 import { SkillDetailModal } from "./SkillDetailModal";
+import { SkillBrowser, SkillMarketButton } from "./SkillBrowser";
 import type { AgentInfo, AgentDetail, SkillInfo, AvailableModel, SessionInfo } from "../types";
 import "../styles/agents.css";
 
@@ -54,6 +55,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
     // Skill detail modal state
     const [showSkillDetail, setShowSkillDetail] = useState(false);
     const [selectedSkill, setSelectedSkill] = useState<SkillInfo | null>(null);
+    const [showMarketplace, setShowMarketplace] = useState(false);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -382,8 +384,11 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
             {/* Skills Section */}
             <div className="skills-section">
                 <h3 className="skills-title">
-                    <Sparkles size={16} strokeWidth={1.5} /> 已安装技能
-                    <span className="skills-count">{skills.length}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <Sparkles size={16} strokeWidth={1.5} /> 已安装技能
+                        <span className="skills-count">{skills.length}</span>
+                    </span>
+                    <SkillMarketButton onClick={() => setShowMarketplace(true)} />
                 </h3>
                 {skills.length === 0 ? (
                     <div className="skills-empty">暂无技能</div>
@@ -712,6 +717,12 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                 show={showSkillDetail}
                 skill={selectedSkill}
                 onClose={() => setShowSkillDetail(false)}
+            />
+
+            {/* Skill Marketplace Browser */}
+            <SkillBrowser
+                show={showMarketplace}
+                onClose={() => setShowMarketplace(false)}
             />
         </motion.div>
     );
