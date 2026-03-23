@@ -40,9 +40,10 @@ interface MarketplaceSkillInfo {
 interface SkillBrowserProps {
     show: boolean;
     onClose: () => void;
+    onRefresh?: () => void;
 }
 
-export function SkillBrowser({ show, onClose }: SkillBrowserProps) {
+export function SkillBrowser({ show, onClose, onRefresh }: SkillBrowserProps) {
     const [registry, setRegistry] = useState<SkillRegistry | null>(null);
     const [installed, setInstalled] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(false);
@@ -120,8 +121,15 @@ export function SkillBrowser({ show, onClose }: SkillBrowserProps) {
         return matchesSearch && matchesCategory;
     }) || [];
 
+    const handleClose = () => {
+        onClose();
+        if (installed.size > 0) {
+            onRefresh?.();
+        }
+    };
+
     return (
-        <Modal show={show} onClose={onClose} title="技能市场" maxWidth={600}>
+        <Modal show={show} onClose={handleClose} title="技能市场" maxWidth={600}>
             <div className="skill-browser-content">
                 {/* Toolbar */}
                 <div className="skill-browser-toolbar">

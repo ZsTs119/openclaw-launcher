@@ -46,13 +46,20 @@
     cursor: pointer;
     outline: none;
     min-width: 100px;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.skill-browser-category option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
 }
 
 /* Skill list */
 .skill-browser-list {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 10px;
     overflow-y: auto;
     max-height: 45vh;
     padding-right: 4px;
@@ -67,21 +74,31 @@
     border-radius: 2px;
 }
 
-/* Skill card */
-.skill-card {
+/* Skill card in browser */
+.skill-browser-list .skill-card {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 16px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
+    text-align: left;
     transition: border-color 0.2s, background 0.2s;
 }
 
-.skill-card:hover {
+.skill-browser-list .skill-card:hover {
     border-color: var(--accent-blue);
-    background: rgba(var(--accent-blue-rgb, 96, 165, 250), 0.05);
+    background: rgba(96, 165, 250, 0.06);
+    transform: none;
+    box-shadow: none;
+}
+
+.skill-browser-list .skill-card-info {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
 }
 
 .skill-card-info {
@@ -125,7 +142,7 @@
 
 /* Action button */
 .skill-card-action {
-    flex-shrink: 0;
+    align-self: flex-start;
 }
 
 .skill-download-btn {

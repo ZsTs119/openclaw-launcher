@@ -723,6 +723,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
             <SkillBrowser
                 show={showMarketplace}
                 onClose={() => setShowMarketplace(false)}
+                onRefresh={loadData}
             />
         </motion.div>
     );
