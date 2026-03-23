@@ -781,6 +781,32 @@ fn scan_skill_dir(root: &PathBuf, dir: &PathBuf, files: &mut Vec<SkillFile>, dep
     }
 }
 
+/// Read a file's content for preview in the skill detail modal.
+/// Only allows reading files under ~/.openclaw/skills/ for security.
+#[tauri::command]
+pub fn read_skill_file(file_path: String) -> Result<String, String> {
+    let path = PathBuf::from(&file_path);
+
+    // Security: only allow reading under skills directory
+    if let Ok(skills) = skills_dir() {
+        if !path.starts_with(&skills) {
+            return Err("不允许读取 skills 目录外的文件".to_string());
+        }
+    }
+
+    if !path.exists() || !path.is_file() {
+        return Err("文件不存在".to_string());
+    }
+
+    // Limit file size to 100KB for preview
+    let meta = path.metadata().map_err(|e| format!("读取文件失败: {}", e))?;
+    if meta.len() > 100 * 1024 {
+        return Err("文件过大，无法预览".to_string());
+    }
+
+    fs::read_to_string(&path).map_err(|e| format!("读取文件失败: {}", e))
+}
+
 #[tauri::command]
 pub fn list_skills() -> Result<Vec<SkillInfo>, String> {
     // Ensure built-in skills exist (idempotent, best-effort)

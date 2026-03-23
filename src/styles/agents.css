@@ -197,6 +197,7 @@
 .skill-card:hover {
     border-color: var(--accent-blue);
     box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.15);
+    transform: scale(1.02);
 }
 
 .skill-card-header {
