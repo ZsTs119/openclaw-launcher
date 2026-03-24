@@ -193,13 +193,14 @@
     flex-direction: column;
     gap: 8px;
     text-align: left;
-    transition: border-color 0.25s ease, box-shadow 0.25s ease;
-    will-change: border-color, box-shadow;
+    cursor: pointer;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
 }
 
 .skill-card:hover {
     border-color: var(--accent-blue);
-    box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.15);
+    background: rgba(96, 165, 250, 0.06);
+    box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.2), 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .skill-card-header {
