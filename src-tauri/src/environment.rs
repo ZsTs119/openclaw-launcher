@@ -361,6 +361,28 @@ pub async fn download_and_install_node(app: tauri::AppHandle) -> Result<String, 
     Ok(format!("Node.js installed at: {}", node_bin.display()))
 }
 
+/// Upgrade Node.js in sandbox: delete old version, download latest v22.
+/// Unlike download_and_install_node, this always re-downloads even if node exists.
+#[tauri::command]
+pub async fn upgrade_node(app: tauri::AppHandle) -> Result<String, String> {
+    let node_dir = get_node_dir()?;
+
+    // Step 1: Remove existing sandbox node
+    if node_dir.exists() {
+        let _ = app.emit("setup-progress", serde_json::json!({
+            "stage": "upgrade_node",
+            "message": "正在清理旧版 Node.js...",
+            "percent": 5
+        }));
+        std::fs::remove_dir_all(&node_dir)
+            .map_err(|e| format!("删除旧版 Node.js 失败: {}", e))?;
+    }
+
+    // Step 2: Re-download using existing logic
+    // download_and_install_node will now proceed since check_node_exists() returns false
+    download_and_install_node(app).await
+}
+
 /// Extract a ZIP file
 fn extract_zip(archive_path: &PathBuf, dest: &PathBuf) -> Result<(), String> {
     let file = std::fs::File::open(archive_path)

@@ -137,10 +137,16 @@ fn get_bound_at(config: &serde_json::Value, config_key: &str) -> Option<String> 
 
 // ──────────────────────────────── Commands ────────────────────────────
 
-/// Check Node.js version (>= 22 required)
+/// Check Node.js version (>= 22 required).
+/// Tries sandbox node first (consistent with service), then system PATH.
 #[tauri::command]
 pub fn check_node_version() -> Result<String, String> {
-    let output = Command::new("node")
+    // Prefer sandbox node (same as start_service uses)
+    let node_cmd = crate::environment::get_node_binary()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| "node".to_string());
+
+    let output = Command::new(&node_cmd)
         .arg("--version")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

@@ -113,6 +113,7 @@ pub fn run() {
             // Environment
             environment::check_node_exists,
             environment::download_and_install_node,
+            environment::upgrade_node,
             environment::get_environment_info,
             // Download
             download::download_openclaw_source,

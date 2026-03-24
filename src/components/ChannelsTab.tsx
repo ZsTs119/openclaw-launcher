@@ -4,7 +4,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Link } from "lucide-react";
+import { listen } from "@tauri-apps/api/event";
+import { Link, Download, Loader, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 import type { ChannelStatus } from "../types";
 import { ChannelCard } from "./ChannelCard";
@@ -28,6 +29,8 @@ const PLATFORM_DESCRIPTIONS: Record<string, string> = {
     qq: "通过 NapCat 插件在 QQ 中使用 AI 助手",
 };
 
+type UpgradeState = "idle" | "upgrading" | "done" | "error";
+
 export function ChannelsTab() {
     const [channels, setChannels] = useState<ChannelStatus[]>([]);
     const [loading, setLoading] = useState(true);
@@ -35,12 +38,14 @@ export function ChannelsTab() {
     const [nodeError, setNodeError] = useState("");
     const [bindingPlatform, setBindingPlatform] = useState<string | null>(null);
 
+    // Upgrade state
+    const [upgradeState, setUpgradeState] = useState<UpgradeState>("idle");
+    const [upgradeMsg, setUpgradeMsg] = useState("");
+
     const loadChannels = useCallback(async () => {
         setLoading(true);
         try {
-            const [status] = await Promise.all([
-                invoke<ChannelStatus[]>("get_channel_status"),
-            ]);
+            const status = await invoke<ChannelStatus[]>("get_channel_status");
             setChannels(status);
         } catch (err) {
             console.error("Failed to load channels:", err);
@@ -49,19 +54,47 @@ export function ChannelsTab() {
         }
     }, []);
 
+    const checkNode = useCallback(async () => {
+        try {
+            await invoke<string>("check_node_version");
+            setNodeOk(true);
+            setNodeError("");
+        } catch (err) {
+            setNodeOk(false);
+            setNodeError(String(err));
+        }
+    }, []);
+
     // Check Node.js on mount
     useEffect(() => {
-        (async () => {
-            try {
-                await invoke<string>("check_node_version");
-                setNodeOk(true);
-            } catch (err) {
-                setNodeOk(false);
-                setNodeError(String(err));
-            }
-        })();
+        checkNode();
         loadChannels();
-    }, [loadChannels]);
+    }, [checkNode, loadChannels]);
+
+    // Listen for upgrade progress events
+    useEffect(() => {
+        const unlisten = listen<{ stage: string; message: string; percent: number }>("setup-progress", (event) => {
+            if (upgradeState === "upgrading") {
+                setUpgradeMsg(event.payload.message);
+            }
+        });
+        return () => { unlisten.then(fn => fn()); };
+    }, [upgradeState]);
+
+    const handleUpgradeNode = async () => {
+        setUpgradeState("upgrading");
+        setUpgradeMsg("正在准备升级...");
+        try {
+            await invoke<string>("upgrade_node");
+            setUpgradeState("done");
+            setUpgradeMsg("Node.js 22 升级完成！建议重启 OpenClaw 服务");
+            // Re-check version
+            await checkNode();
+        } catch (err) {
+            setUpgradeState("error");
+            setUpgradeMsg(String(err));
+        }
+    };
 
     const handleStartBinding = (platformId: string) => {
         setBindingPlatform(platformId);
@@ -69,7 +102,6 @@ export function ChannelsTab() {
 
     const handleBindingClose = () => {
         setBindingPlatform(null);
-        // Reload channel status after binding attempt
         loadChannels();
     };
 
@@ -95,9 +127,34 @@ export function ChannelsTab() {
                 平台接入
             </h2>
 
+            {/* Node.js version warning + upgrade */}
             {!nodeOk && (
                 <div className="channel-node-warning">
-                    ⚠️ {nodeError || "Node.js 22+ 未安装，绑定功能不可用"}
+                    <div className="node-warning-content">
+                        <span>⚠️ {nodeError || "Node.js 22+ 未安装，绑定功能不可用"}</span>
+                        {upgradeState === "idle" && (
+                            <button className="btn-upgrade" onClick={handleUpgradeNode}>
+                                <Download size={13} /> 一键升级
+                            </button>
+                        )}
+                        {upgradeState === "upgrading" && (
+                            <span className="upgrade-progress">
+                                <Loader size={13} className="spin-animation" /> {upgradeMsg}
+                            </span>
+                        )}
+                        {upgradeState === "error" && (
+                            <button className="btn-upgrade" onClick={handleUpgradeNode}>
+                                <RefreshCw size={13} /> 重试升级
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Upgrade success hint (show even when nodeOk becomes true) */}
+            {upgradeState === "done" && nodeOk && (
+                <div className="channel-node-success">
+                    ✅ {upgradeMsg}
                 </div>
             )}
 
@@ -130,3 +187,4 @@ export function ChannelsTab() {
         </motion.div>
     );
 }
+
