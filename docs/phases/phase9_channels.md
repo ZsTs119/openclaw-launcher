@@ -1,96 +1,82 @@
-# Phase 9: 平台接入配置
+# Phase 9: 平台接入
 
 > 📋 待开始 | 目标版本：`v0.7.0`
 
+## 概述
+
+新增「平台接入」Tab，支持微信和飞书的扫码绑定/解绑管理。
+架构可扩展，后续支持 Telegram/Discord/QQ（Token 模式）。
+
 ## 铁律
 
-> [!CAUTION]
-> **三端验收**：所有改动必须在 Windows / Linux / macOS 三端验证通过。
-> **UI 一致**：深色主题配色、Lucide 图标、`framer-motion` 动画。
-> **不破坏已有配置**：写入 channels 时不能覆盖 models/agents/gateway 字段。
+- 不修改现有 Tab（仪表盘/AI引擎/智能体/设置）
+- 新文件独立（`channels.rs` / `ChannelsTab.tsx`）
+- 平台抽象可扩展（`ChannelConfig` + `BindMode`）
 
 ---
 
-## 技术前提：JSON 结构化读写
+## 9.1 后端 — channels.rs
 
-> [!WARNING]
-> 当前 `config.rs` 用字符串拼接操作 JSON，不够健壮。本 Phase 必须先将配置读写重构为 `serde_json::Value`，确保 channels 写入不破坏其他字段。
+新增 `channels.rs` 模块，6 个 Tauri 命令：
 
-### 重构步骤
-1. 读取 `openclaw.json` → `serde_json::Value`
-2. 按路径修改指定字段 (如 `["channels"]["telegram"]`)
-3. 写回文件（保留其他字段不变）
-
----
-
-## 9.1 平台配置 UI
-
-### 位置
-集成到「智能体」Tab 底部，与 Agent 管理在同一页面。
-
-### 每个平台的引导流程
-
-#### Telegram
-| 步骤 | 内容 |
+| 命令 | 功能 |
 |---|---|
-| Step 1 | 引导打开 @BotFather（带链接按钮）|
-| Step 2 | 输入 Bot Token（格式校验: `\d+:[A-Za-z0-9_-]+`）|
-| Step 3 | DM/群聊策略选择 (pairing / open / allowlist) |
+| `check_node_version` | 检测 Node.js ≥ 22 |
+| `get_channel_status` | 读 config 返回各平台绑定状态 |
+| `start_channel_binding(platform)` | spawn npx，解析 stdout 返回 QR URL |
+| `poll_binding_result(platform)` | 轮询进程状态 + config 变化 |
+| `cancel_channel_binding(platform)` | kill 子进程 |
+| `unbind_channel(platform)` | 清 config channels 字段 |
 
-#### Discord
-| 步骤 | 内容 |
+QR URL 提取：spawn → piped stdout → 正则匹配 `https://` URL → 返回前端渲染
+
+## 9.2 前端 — Tab + 组件
+
+| 组件 | 职责 |
 |---|---|
-| Step 1 | 引导打开 Discord Developer Portal |
-| Step 2 | 输入 Bot Token |
-| Step 3 | 提醒用户开启 Message Content Intent |
-| Step 4 | 生成邀请链接提示 |
+| `ChannelsTab.tsx` | Tab 主体，平台卡片网格 |
+| `ChannelCard.tsx` | 卡片：未绑定/已绑定两态 |
+| `BindingModal.tsx` | 绑定弹窗：QR + 步骤 + 状态流转 |
+| `channels.css` | 样式 |
 
-#### 飞书
-| 步骤 | 内容 |
-|---|---|
-| Step 1 | 引导打开飞书开放平台 |
-| Step 2 | 输入 App ID + App Secret |
-| Step 3 | 输入 Verification Token + Event URL 说明 |
+### 绑定弹窗状态流
 
-### 新增后端命令 (`channels.rs` NEW)
+```
+加载中 → QR展示 → 等待扫码 → 成功(自动关闭)
+                        ↓
+                     过期 → [重新生成]
+                        ↓
+                     错误 → [重试] / [终端打开]
+```
 
-| 命令 | 说明 |
-|---|---|
-| `list_channels()` | 读取 openclaw.json 的 channels 部分 |
-| `save_channel_config(platform, config)` | 结构化写入 channels 配置 |
-| `remove_channel(platform)` | 删除指定平台配置 |
+### 平台卡片
 
-### 边界情况
-- Token 格式校验失败 → 前端红字提示，不允许保存
-- 已有配置的平台显示"已连接"状态 + 编辑/删除按钮
-- openclaw.json 不存在时 → 先创建基础结构再写 channels
-- 多账号场景（同一平台多个 bot）→ V3 暂不支持，1 平台 1 账号
--  QQ: 需确认 OpenClaw 原生支持情况，若不支持则此阶段不做
-
----
-
-## 变更文件
-
-| 文件 | 操作 | 说明 |
+| 平台 | 状态 | 模式 |
 |---|---|---|
-| [NEW] `src-tauri/src/channels.rs` | 新增 | 频道配置 CRUD |
-| [NEW] `src/components/ChannelConfigModal.tsx` | 新增 | 分步配置弹窗 |
-| `src-tauri/src/config.rs` | 重构 | 字符串拼接 → serde_json::Value |
-| `src/components/AgentsTab.tsx` | 修改 | 底部新增平台接入区域 |
-| `src-tauri/src/lib.rs` | 修改 | 注册新命令 |
+| 微信 | 可用 | QrCode |
+| 飞书 | 可用 | QrCode |
+| Telegram | 敬请期待 | Token (future) |
+| Discord | 敬请期待 | Token (future) |
+| QQ | 敬请期待 | Manual (future) |
 
----
+## 9.3 边界处理
+
+- Node.js 未安装/版本低 → 灰色按钮 + 提示
+- 网关未运行 → 灰色按钮 + 提示
+- stdout 无 URL → 5s 超时 → 降级终端打开
+- QR 过期 → 进程退出 → [重新生成] 按钮
+- 关闭弹窗 → kill 子进程
+- 解绑 3s 确认 + 飞书跳转提示
+- config 无 channels → 默认未绑定
 
 ## 验收标准
 
 ```
-✅ Telegram: 输入 Bot Token → 写入 openclaw.json → 重启服务后 bot 响应
-✅ Discord: 完整引导 → 配置正确写入
-✅ 飞书: 三步引导 → 配置正确写入
-✅ 已有 API Key / 模型 / Agent 配置不受影响
-✅ 删除频道 → 配置正确清理
-✅ Token 格式错误 → 前端校验提示
-✅ openclaw.json 从无到有 → 正确生成
-✅ [Windows / Linux / macOS] 三端验证通过
-✅ cargo test 通过
+[ ] Tab 切换正常，不影响其他模块
+[ ] 微信：绑定弹窗 → QR → 等待/过期/成功
+[ ] 飞书：同上
+[ ] 解绑：3s 确认 → config 清除 → UI 回到未绑定
+[ ] 边界：网关提示 / Node 提示 / 降级提示
+[ ] 敬请期待卡片正确
+[ ] cargo check + tsc
 ```
