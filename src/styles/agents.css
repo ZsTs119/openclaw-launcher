@@ -198,9 +198,9 @@
 }
 
 .skill-card:hover {
-    border-color: rgba(255, 255, 255, 0.6);
-    background: rgba(96, 165, 250, 0.06);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 2px 8px rgba(0, 0, 0, 0.15);
+    border-color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .skill-card-header {
