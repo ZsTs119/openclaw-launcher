@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle, History, SquarePlus, Eye, PackageMinus } from "lucide-react";
+import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle, History, SquarePlus, PackageMinus } from "lucide-react";
 import { motion } from "framer-motion";
 import { Modal } from "./ui/Modal";
 import { CustomDropdown } from "./ui/CustomDropdown";
@@ -467,18 +467,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                                     <PackageMinus size={12} strokeWidth={1.5} /> 卸载
                                                 </button>
                                             )
-                                        )}
-                                        <button
-                                            className="btn-ghost btn-skill-detail"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSelectedSkill(skill);
-                                                setShowSkillDetail(true);
-                                            }}
-                                        >
-                                            <Eye size={12} strokeWidth={1.5} /> 详情
-                                        </button>
-                                    </div>
+                                        )}\n                                    </div>
                                 </div>
                             </div>
                         ))}
