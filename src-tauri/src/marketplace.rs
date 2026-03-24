@@ -151,6 +151,9 @@ pub fn uninstall_marketplace_skill(slug: String) -> Result<(), String> {
     fs::remove_dir_all(&skill_dir)
         .map_err(|e| format!("删除失败: {}", e))?;
 
+    // Cascade cleanup: remove this slug from all agents' skills config
+    crate::agents::remove_skill_from_all_agents(&slug)?;
+
     Ok(())
 }
 

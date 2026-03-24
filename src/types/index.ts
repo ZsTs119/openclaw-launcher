@@ -29,6 +29,7 @@ export interface AgentInfo {
     last_chat_session_key: string | null;
     allow_agents: string[];
     is_supervisor: boolean;
+    skills: string[];
 }
 
 export interface SessionInfo {
@@ -52,6 +53,7 @@ export interface AgentDetail {
     is_default: boolean;
     is_supervisor: boolean;
     allow_agents: string[];
+    skills: string[];
 }
 
 export interface AvailableModel {

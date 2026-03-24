@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle, History, SquarePlus, Eye } from "lucide-react";
+import { Bot, Plus, Pencil, Trash2, Sparkles, Shield, MessageCircle, AlertTriangle, History, SquarePlus, Eye, PackageMinus } from "lucide-react";
 import { motion } from "framer-motion";
 import { Modal } from "./ui/Modal";
 import { CustomDropdown } from "./ui/CustomDropdown";
@@ -38,8 +38,13 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
     const [newModel, setNewModel] = useState("");
     const [newPrompt, setNewPrompt] = useState("");
     const [newAllowAgents, setNewAllowAgents] = useState<string[]>(["main"]);
+    const [newSkills, setNewSkills] = useState<string[]>([]);
     const [formError, setFormError] = useState("");
     const [saving, setSaving] = useState(false);
+
+    // Uninstall skill state
+    const [uninstallSlug, setUninstallSlug] = useState<string | null>(null);
+    const [uninstallCountdown, setUninstallCountdown] = useState(0);
 
     // Session history modal state
     const [showHistory, setShowHistory] = useState(false);
@@ -82,6 +87,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
         setNewModel("");
         setNewPrompt("");
         setNewAllowAgents(["main"]);
+        setNewSkills([]);
         setFormError("");
     };
 
@@ -98,6 +104,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                 model: newModel || null,
                 systemPrompt: newPrompt.trim() || null,
                 allowAgents: newAllowAgents,
+                skills: newSkills,
             });
             setShowCreate(false);
             resetForm();
@@ -115,6 +122,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
             setSelectedAgent(detail);
             setNewPrompt(detail.system_prompt || "");
             setNewAllowAgents(detail.allow_agents || ["main"]);
+            setNewSkills(detail.skills || []);
             // Use model_ref (raw "provider/model_id") for dropdown pre-selection
             setNewModel(detail.model_ref || "");
             setShowEdit(true);
@@ -133,6 +141,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                 systemPrompt: newPrompt.trim() || null,
                 model: newModel || null,
                 allowAgents: newAllowAgents,
+                skills: newSkills,
             });
             setShowEdit(false);
             setSelectedAgent(null);
@@ -246,6 +255,30 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
             return () => clearTimeout(timer);
         }
     }, [agentDeleteCountdown]);
+
+    // Uninstall countdown timer
+    useEffect(() => {
+        if (uninstallCountdown > 0) {
+            const timer = setTimeout(() => setUninstallCountdown((c) => c - 1), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [uninstallCountdown]);
+
+    const handleUninstallSkill = async () => {
+        if (!uninstallSlug) return;
+        try {
+            await invoke("uninstall_marketplace_skill", { slug: uninstallSlug });
+            setUninstallSlug(null);
+            await loadData();
+        } catch (err) {
+            console.error("Uninstall failed:", err);
+        }
+    };
+
+    // Filter: only marketplace skills (path contains "marketplace-skills")
+    const marketplaceSkills = skills.filter(s => s.path.includes("marketplace-skills"));
+    const isMarketplaceSkill = (s: SkillInfo) => s.path.includes("marketplace-skills");
+    const getSlug = (s: SkillInfo) => s.path.split(/[/\\]/).filter(Boolean).pop() || s.name;
 
     const handleDeleteSession = async () => {
         if (!deleteSessionId) return;
@@ -366,6 +399,7 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                                 is_default: agent.is_default,
                                                 is_supervisor: false,
                                                 allow_agents: [],
+                                                skills: [],
                                             });
                                             setAgentDeleteCountdown(3);
                                             setShowDelete(true);
@@ -395,7 +429,10 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                 ) : (
                     <div className="skills-grid">
                         {skills.map((skill) => (
-                            <div key={skill.path} className="skill-card">
+                            <div key={skill.path} className="skill-card" onClick={() => {
+                                setSelectedSkill(skill);
+                                setShowSkillDetail(true);
+                            }}>
                                 <div className="skill-card-header">
                                     <Sparkles size={14} strokeWidth={1.5} className="skill-icon" />
                                     <div className="skill-name">{skill.name}</div>
@@ -407,15 +444,41 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                     <span className="skill-path-hint" title={skill.path}>
                                         {skill.path.split(/[/\\]/).slice(-2).join("/")}
                                     </span>
-                                    <button
-                                        className="btn-ghost btn-skill-detail"
-                                        onClick={() => {
-                                            setSelectedSkill(skill);
-                                            setShowSkillDetail(true);
-                                        }}
-                                    >
-                                        <Eye size={12} strokeWidth={1.5} /> 详情
-                                    </button>
+                                    <div className="skill-footer-actions">
+                                        {isMarketplaceSkill(skill) && (
+                                            uninstallSlug === getSlug(skill) ? (
+                                                <button
+                                                    className="btn-ghost btn-danger-ghost"
+                                                    disabled={uninstallCountdown > 0}
+                                                    onClick={(e) => { e.stopPropagation(); handleUninstallSkill(); }}
+                                                >
+                                                    {uninstallCountdown > 0 ? `确认 (${uninstallCountdown}s)` : "确认卸载"}
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    className="btn-ghost btn-danger-ghost"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setUninstallSlug(getSlug(skill));
+                                                        setUninstallCountdown(3);
+                                                    }}
+                                                    title="卸载技能"
+                                                >
+                                                    <PackageMinus size={12} strokeWidth={1.5} /> 卸载
+                                                </button>
+                                            )
+                                        )}
+                                        <button
+                                            className="btn-ghost btn-skill-detail"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedSkill(skill);
+                                                setShowSkillDetail(true);
+                                            }}
+                                        >
+                                            <Eye size={12} strokeWidth={1.5} /> 详情
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -501,6 +564,35 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                 : `已选 ${newAllowAgents.filter(n => n !== "main").length} 个 Agent（main 默认可回调）`}
                         </span>
                     </label>
+                    {marketplaceSkills.length > 0 && (
+                        <label className="form-label">
+                            <span>市场技能</span>
+                            <div className="perm-checkbox-group">
+                                {marketplaceSkills.map(s => {
+                                    const slug = getSlug(s);
+                                    return (
+                                        <label key={slug} className="perm-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                checked={newSkills.includes(slug)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setNewSkills([...newSkills, slug]);
+                                                    } else {
+                                                        setNewSkills(newSkills.filter(n => n !== slug));
+                                                    }
+                                                }}
+                                            />
+                                            <span>{s.name}</span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                            <span className="form-hint">
+                                {newSkills.length === 0 ? "未选择市场技能（内置技能始终可用）" : `已选 ${newSkills.length} 个市场技能`}
+                            </span>
+                        </label>
+                    )}
                     {formError && <div className="form-error">{formError}</div>}
                     <div className="form-actions">
                         <button className="btn-secondary" onClick={() => setShowCreate(false)}>取消</button>
@@ -581,6 +673,35 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                 {newAllowAgents.includes("*")
                                     ? "可调用所有 Agent"
                                     : `已选 ${newAllowAgents.length} 个 Agent`}
+                            </span>
+                        </label>
+                    )}
+                    {marketplaceSkills.length > 0 && (
+                        <label className="form-label">
+                            <span>市场技能</span>
+                            <div className="perm-checkbox-group">
+                                {marketplaceSkills.map(s => {
+                                    const slug = getSlug(s);
+                                    return (
+                                        <label key={slug} className="perm-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                checked={newSkills.includes(slug)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setNewSkills([...newSkills, slug]);
+                                                    } else {
+                                                        setNewSkills(newSkills.filter(n => n !== slug));
+                                                    }
+                                                }}
+                                            />
+                                            <span>{s.name}</span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                            <span className="form-hint">
+                                {newSkills.length === 0 ? "未选择市场技能" : `已选 ${newSkills.length} 个市场技能`}
                             </span>
                         </label>
                     )}

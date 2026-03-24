@@ -25,6 +25,8 @@ pub struct AgentInfo {
     pub allow_agents: Vec<String>,
     /// Computed: true if allow_agents contains "*"
     pub is_supervisor: bool,
+    /// Marketplace skill slugs assigned to this agent
+    pub skills: Vec<String>,
 }
 
 /// Detail for a single agent
@@ -40,6 +42,7 @@ pub struct AgentDetail {
     pub is_default: bool,
     pub is_supervisor: bool,
     pub allow_agents: Vec<String>,
+    pub skills: Vec<String>,
 }
 
 /// Available model for dropdown
@@ -179,6 +182,62 @@ fn get_allow_agents(config: &serde_json::Value, agent_id: &str) -> Vec<String> {
         .and_then(|aa| aa.as_array())
         .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
         .unwrap_or_else(|| if agent_id == "main" { vec!["*".to_string()] } else { vec!["main".to_string()] })
+}
+
+/// Read skills array from agents.list[] for a given agent
+fn get_agent_skills(config: &serde_json::Value, agent_id: &str) -> Vec<String> {
+    config.get("agents")
+        .and_then(|a| a.get("list"))
+        .and_then(|l| l.as_array())
+        .and_then(|arr| arr.iter().find(|a| a.get("id").and_then(|id| id.as_str()) == Some(agent_id)))
+        .and_then(|a| a.get("skills"))
+        .and_then(|s| s.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+        .unwrap_or_default()
+}
+
+/// Update skills array in agents.list[] for a given agent
+fn update_agent_skills_in_config(agent_id: &str, skills: &[String]) -> Result<(), String> {
+    let mut config = read_config()?;
+
+    if let Some(list) = config.get_mut("agents")
+        .and_then(|a| a.get_mut("list"))
+        .and_then(|l| l.as_array_mut())
+    {
+        if let Some(entry) = list.iter_mut().find(|a|
+            a.get("id").and_then(|id| id.as_str()) == Some(agent_id)
+        ) {
+            entry["skills"] = serde_json::json!(skills);
+        }
+    }
+
+    write_config(&config)
+}
+
+/// Remove a skill slug from ALL agents' skills arrays (cascade cleanup)
+pub(crate) fn remove_skill_from_all_agents(slug: &str) -> Result<(), String> {
+    let mut config = read_config()?;
+    let mut changed = false;
+
+    if let Some(list) = config.get_mut("agents")
+        .and_then(|a| a.get_mut("list"))
+        .and_then(|l| l.as_array_mut())
+    {
+        for entry in list.iter_mut() {
+            if let Some(skills) = entry.get_mut("skills").and_then(|s| s.as_array_mut()) {
+                let before = skills.len();
+                skills.retain(|v| v.as_str() != Some(slug));
+                if skills.len() != before {
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    if changed {
+        write_config(&config)?;
+    }
+    Ok(())
 }
 
 /// Update model field in agents.list[] entry in openclaw.json
@@ -338,7 +397,7 @@ pub fn ensure_builtin_resources() {
 }
 
 /// Add an agent entry to agents.list[] in openclaw.json
-fn add_to_agents_list(agent_id: &str, workspace: &str, allow_agents: &[String], model: Option<&str>) -> Result<(), String> {
+fn add_to_agents_list(agent_id: &str, workspace: &str, allow_agents: &[String], model: Option<&str>, skills: Option<&[String]>) -> Result<(), String> {
     let mut config = read_config()?;
 
     // Ensure agents.list exists
@@ -371,6 +430,11 @@ fn add_to_agents_list(agent_id: &str, workspace: &str, allow_agents: &[String], 
             if !model_ref.is_empty() {
                 entry["model"] = serde_json::Value::String(model_ref.to_string());
             }
+        }
+
+        // Set skills if specified
+        if let Some(skill_list) = skills {
+            entry["skills"] = serde_json::json!(skill_list);
         }
 
         list.push(entry);
@@ -529,6 +593,7 @@ pub fn list_agents() -> Result<Vec<AgentInfo>, String> {
 
         let allow_agents = get_allow_agents(&config, &name);
         let is_supervisor = allow_agents.contains(&"*".to_string());
+        let skills = get_agent_skills(&config, &name);
 
         agents.push(AgentInfo {
             is_default: name == "main",
@@ -539,6 +604,7 @@ pub fn list_agents() -> Result<Vec<AgentInfo>, String> {
             last_chat_session_key,
             allow_agents,
             is_supervisor,
+            skills,
         });
     }
 
@@ -575,6 +641,7 @@ pub fn get_agent_detail(name: String) -> Result<AgentDetail, String> {
     let has_sessions = count_active_sessions(&agent_path.join("sessions")) > 0;
     let allow_agents = get_allow_agents(&config, &name);
     let is_supervisor = allow_agents.contains(&"*".to_string());
+    let skills = get_agent_skills(&config, &name);
 
     Ok(AgentDetail {
         is_default: name == "main",
@@ -586,6 +653,7 @@ pub fn get_agent_detail(name: String) -> Result<AgentDetail, String> {
         has_sessions,
         is_supervisor,
         allow_agents,
+        skills,
     })
 }
 
@@ -595,6 +663,7 @@ pub fn create_agent(
     model: Option<String>,
     system_prompt: Option<String>,
     allow_agents: Option<Vec<String>>,
+    skills: Option<Vec<String>>,
 ) -> Result<(), String> {
     let dir = agents_dir()?;
     let agent_path = dir.join(&name);
@@ -627,7 +696,7 @@ pub fn create_agent(
 
     // Add to openclaw.json agents.list
     let agents = allow_agents.unwrap_or_else(|| vec!["main".to_string()]);
-    add_to_agents_list(&name, &ws.to_string_lossy(), &agents, model.as_deref())?;
+    add_to_agents_list(&name, &ws.to_string_lossy(), &agents, model.as_deref(), skills.as_deref())?;
 
     Ok(())
 }
@@ -638,6 +707,7 @@ pub fn update_agent(
     system_prompt: Option<String>,
     model: Option<String>,
     allow_agents: Option<Vec<String>>,
+    skills: Option<Vec<String>>,
 ) -> Result<(), String> {
     let dir = agents_dir()?;
     let agent_path = dir.join(&name);
@@ -646,7 +716,7 @@ pub fn update_agent(
         return Err(format!("Agent '{}' 不存在", name));
     }
 
-    let agent_dir = agent_path.join("agent");
+    let _agent_dir = agent_path.join("agent");
 
     // Update system prompt → write to workspace SOUL.md
     if let Some(prompt) = system_prompt {
@@ -666,6 +736,11 @@ pub fn update_agent(
     // Update permission
     if let Some(agents) = allow_agents {
         update_agent_permission(&name, &agents)?;
+    }
+
+    // Update skills
+    if let Some(skill_list) = skills {
+        update_agent_skills_in_config(&name, &skill_list)?;
     }
 
     Ok(())
