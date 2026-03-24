@@ -463,11 +463,13 @@ export function AgentsTab({ openInBrowser }: AgentsTabProps) {
                                                         setUninstallCountdown(3);
                                                     }}
                                                     title="卸载技能"
+                                                    style={{ display: "flex", alignItems: "center", gap: 4 }}
                                                 >
                                                     <PackageMinus size={12} strokeWidth={1.5} /> 卸载
                                                 </button>
                                             )
-                                        )}\n                                    </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))}
