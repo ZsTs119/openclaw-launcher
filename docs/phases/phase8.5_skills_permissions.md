@@ -155,3 +155,62 @@
 [x] 技能市场 → 搜索 + 分类 → 下载 → 显示在已安装列表
 [x] cargo check + tsc 通过
 ```
+
+---
+
+## 8.6 Agent 技能配置 + 技能卸载 (待实施)
+
+> Module D: 配置级技能管理
+
+### 8.6.1 Agent 技能选择
+
+在创建/编辑 Agent 弹窗中新增「市场技能」checkbox 列表。
+
+| 规则 | 说明 |
+|---|---|
+| 仅展示市场技能 | `marketplace-skills/` 下的技能 |
+| 内置 4 个不展示 | 始终可用，不可选不可去 |
+| 新建 Agent 默认空 | 不自动勾选任何市场技能 |
+| 存储方式 | `openclaw.json` agent 配置 `skills: string[]` |
+
+#### 后端改动
+
+| 函数 | 改动 |
+|---|---|
+| `AgentInfo` struct | 新增 `skills: Vec<String>` |
+| `create_agent` | 接收 `skills` 参数，写入 config |
+| `update_agent` | 接收 `skills` 参数，更新 config |
+| `load_agent_detail` | 读取 `skills` 返回前端 |
+
+### 8.6.2 已安装技能卸载
+
+| 类型 | 可卸载 | 原因 |
+|---|---|---|
+| 内置技能 | ❌ | `ensure_builtin_resources()` 自动装回 |
+| 市场技能 | ✅ | 用户自主管理 |
+
+- 卸载按钮仅出现在 path 含 `marketplace-skills` 的卡片
+- 3s 倒计时确认（与删除 Agent 一致）
+- **级联清理**：遍历所有 agent 的 `skills[]` 移除该 slug
+
+### 8.6.3 技能卡片点击 = 详情
+
+- `.skill-card` div 新增 `onClick` 打开 `SkillDetailModal`
+- 「详情」按钮 `stopPropagation` 防冒泡
+
+### 边界处理
+
+- 零市场技能 → 选择器提示"前往技能市场下载"
+- 老版 config 无 `skills` → 默认 `[]`
+- 卸载后级联清理所有 agent 引用
+- 不影响：仪表盘 / AI 引擎 / 数据统计 / 设置 / 会话路由
+
+### 验收标准
+
+```
+[ ] 创建 Agent → 技能选择 → 保存 → 编辑回显
+[ ] 卸载市场技能 → agent config 级联清理
+[ ] 内置技能无卸载按钮
+[ ] 点击卡片 = 打开详情弹窗
+[ ] cargo check + tsc 通过
+```
