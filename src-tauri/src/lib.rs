@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // This file is part of OpenClaw Launcher. See LICENSE for details.
 mod agents;
+mod channels;
 mod config;
 mod diagnostics;
 mod download;
@@ -167,6 +168,13 @@ pub fn run() {
             marketplace::download_marketplace_skill,
             marketplace::uninstall_marketplace_skill,
             marketplace::list_marketplace_skills,
+            // Channels (Platform Integration)
+            channels::check_node_version,
+            channels::get_channel_status,
+            channels::start_channel_binding,
+            channels::poll_binding_result,
+            channels::cancel_channel_binding,
+            channels::unbind_channel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

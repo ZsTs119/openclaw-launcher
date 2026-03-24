@@ -1,0 +1,332 @@
+/* Phase 9: Channels Tab Styles */
+
+/* ─── Grid ─── */
+.channels-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.channels-loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary);
+}
+
+/* ─── Node Warning ─── */
+.channel-node-warning {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #ef4444;
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
+/* ─── Card Base ─── */
+.channel-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.channel-card:hover {
+    border-color: var(--border-hover);
+}
+
+/* Disabled (coming soon) */
+.channel-card-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Bound */
+.channel-card-bound {
+    border-color: rgba(34, 197, 94, 0.2);
+}
+
+/* ─── Card Header ─── */
+.channel-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.channel-icon {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.channel-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+/* ─── Badges ─── */
+.channel-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.badge-bound {
+    background: rgba(34, 197, 94, 0.12);
+    color: #22c55e;
+}
+
+.badge-unbound {
+    background: rgba(148, 163, 184, 0.1);
+    color: var(--text-secondary);
+}
+
+.badge-coming-soon {
+    background: rgba(148, 163, 184, 0.08);
+    color: var(--text-tertiary, #64748b);
+}
+
+/* ─── Description ─── */
+.channel-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* ─── Bound Info ─── */
+.channel-bound-info {
+    font-size: 11px;
+    color: var(--text-tertiary, #64748b);
+}
+
+/* ─── Actions ─── */
+.channel-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.btn-primary-sm {
+    font-size: 12px;
+    padding: 5px 14px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent-gradient, linear-gradient(135deg, #6366f1, #8b5cf6));
+    color: #fff;
+    cursor: pointer;
+    font-weight: 500;
+    transition: opacity 0.2s;
+}
+
+.btn-primary-sm:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+.btn-primary-sm:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-ghost-sm {
+    font-size: 12px;
+    padding: 5px 12px;
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.btn-ghost-sm:hover {
+    color: var(--text-primary);
+    border-color: var(--border-hover);
+}
+
+.btn-unbind {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.btn-unbind:hover {
+    border-color: #ef4444;
+}
+
+.btn-danger-sm {
+    font-size: 12px;
+    padding: 5px 12px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    color: #ef4444;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.btn-danger-sm:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ═══════════════════════════════
+   Binding Modal
+   ═══════════════════════════════ */
+
+.binding-modal-content {
+    padding: 8px 0;
+}
+
+.binding-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 0;
+    text-align: center;
+}
+
+/* Loading */
+.binding-loading {
+    color: var(--text-secondary);
+}
+
+.binding-loading p {
+    font-size: 14px;
+    margin: 0;
+}
+
+.binding-hint {
+    font-size: 11px;
+    color: var(--text-tertiary, #64748b);
+}
+
+.spin-animation {
+    animation: spin 1.2s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* QR Ready */
+.binding-qr {
+    align-items: stretch;
+}
+
+.binding-qr-layout {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+.binding-qr-code {
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.binding-steps {
+    flex: 1;
+}
+
+.binding-steps h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 10px;
+}
+
+.binding-steps ol {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.binding-steps li {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 2;
+}
+
+.binding-waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 12px;
+}
+
+/* Success */
+.binding-success {
+    color: #22c55e;
+}
+
+.binding-success p {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+}
+
+/* Expired */
+.binding-expired {
+    color: var(--text-secondary);
+}
+
+.binding-expired p {
+    font-size: 14px;
+    margin: 0;
+}
+
+.binding-expired button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+/* Error */
+.binding-error {
+    color: var(--text-secondary);
+}
+
+.binding-error-msg {
+    font-size: 13px;
+    color: #ef4444;
+    margin: 0;
+    max-width: 400px;
+    word-break: break-all;
+}
+
+.binding-error-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.binding-error-actions button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}

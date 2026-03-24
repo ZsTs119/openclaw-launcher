@@ -10,7 +10,23 @@
 
 // ===== App State =====
 export type AppPhase = "checking" | "initializing" | "workspace" | "ready";
-export type TabId = "dashboard" | "models" | "agents" | "analytics" | "settings";
+export type TabId = "dashboard" | "models" | "agents" | "channels" | "analytics" | "settings";
+
+// ===== Channel / Platform types =====
+export interface ChannelStatus {
+    id: string;
+    name: string;
+    bound: boolean;
+    bind_mode: string;     // "qrcode" | "token" | "manual"
+    available: boolean;
+    bound_at: string | null;
+}
+
+export interface BindingProgress {
+    status: string;        // "pending" | "qr_ready" | "success" | "expired" | "error"
+    qr_url: string | null;
+    message: string | null;
+}
 
 // ===== Data Models =====
 export interface LogEntry {
