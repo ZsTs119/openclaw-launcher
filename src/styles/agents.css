@@ -193,13 +193,13 @@
     flex-direction: column;
     gap: 8px;
     text-align: left;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    will-change: border-color, box-shadow;
 }
 
 .skill-card:hover {
     border-color: var(--accent-blue);
     box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.15);
-    transform: scale(1.02);
 }
 
 .skill-card-header {

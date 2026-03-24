@@ -807,16 +807,18 @@ fn scan_skill_dir(root: &PathBuf, dir: &PathBuf, files: &mut Vec<SkillFile>, dep
 }
 
 /// Read a file's content for preview in the skill detail modal.
-/// Only allows reading files under ~/.openclaw/skills/ for security.
+/// Only allows reading files under ~/.openclaw/skills/ or marketplace-skills/ for security.
 #[tauri::command]
 pub fn read_skill_file(file_path: String) -> Result<String, String> {
     let path = PathBuf::from(&file_path);
 
-    // Security: only allow reading under skills directory
-    if let Ok(skills) = skills_dir() {
-        if !path.starts_with(&skills) {
-            return Err("不允许读取 skills 目录外的文件".to_string());
-        }
+    // Security: only allow reading under skills or marketplace-skills directories
+    let skills_ok = skills_dir().map(|d| path.starts_with(&d)).unwrap_or(false);
+    let home = dirs::home_dir().ok_or("无法获取 home 目录")?;
+    let marketplace_ok = path.starts_with(home.join(".openclaw").join("marketplace-skills"));
+
+    if !skills_ok && !marketplace_ok {
+        return Err("不允许读取 skills 目录外的文件".to_string());
     }
 
     if !path.exists() || !path.is_file() {
