@@ -309,7 +309,8 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
     // ── Extract QR URL by tailing the openclaw log file ──
     // The CLI triggers QR generation in the gateway. The QR URL is logged as JSON:
     //   {"1":"二维码链接: https://liteapp.weixin.qq.com/q/..."}
-    // Log file: /tmp/openclaw/openclaw-YYYY-MM-DD.log
+    // Log file: /tmp/openclaw/openclaw-YYYY-MM-DD.log (Linux)
+    //           C:\tmp\openclaw\openclaw-YYYY-MM-DD.log (Windows)
     let today = {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -319,7 +320,8 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         let (year, month, day) = civil_from_days(days);
         format!("{:04}-{:02}-{:02}", year, month, day)
     };
-    let log_path = std::path::PathBuf::from(format!("/tmp/openclaw/openclaw-{}.log", today));
+    let log_filename = format!("openclaw-{}.log", today);
+    let log_path = get_openclaw_log_dir().join(&log_filename);
 
     if !log_path.exists() {
         return Err("OpenClaw 日志文件不存在。请确保服务已启动。".to_string());
@@ -493,6 +495,33 @@ fn civil_from_days(days: i64) -> (i32, u32, u32) {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
     (y as i32, m, d)
+}
+
+/// Get the openclaw log directory (platform-specific).
+/// Linux:   /tmp/openclaw/
+/// Windows: C:\tmp\openclaw\ (gateway's default log location)
+fn get_openclaw_log_dir() -> std::path::PathBuf {
+    #[cfg(unix)]
+    {
+        std::path::PathBuf::from("/tmp/openclaw")
+    }
+    #[cfg(windows)]
+    {
+        // Gateway logs to \tmp\openclaw\ (at drive root, not %TEMP%)
+        // Try the drive where openclaw is installed first
+        let candidates = [
+            std::path::PathBuf::from(r"C:\tmp\openclaw"),
+            std::path::PathBuf::from(r"\tmp\openclaw"),
+        ];
+        for dir in &candidates {
+            if dir.exists() {
+                return dir.clone();
+            }
+        }
+        // Fallback to %TEMP%
+        let temp = std::env::var("TEMP").unwrap_or_else(|_| r"C:\tmp".to_string());
+        std::path::PathBuf::from(temp).join("openclaw")
+    }
 }
 
 fn cleanup_binding(platform: &str) {
