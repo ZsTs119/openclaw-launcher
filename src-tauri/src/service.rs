@@ -430,14 +430,13 @@ fn is_service_ready_signal(line: &str) -> bool {
 /// that occurs when a gateway from a previous session (manual start, watchdog,
 /// or crashed Launcher) is still running.
 fn cleanup_stale_gateway(app: &tauri::AppHandle) {
-    let uid = unsafe { libc::getuid() };
-    let lock_dir = std::path::PathBuf::from(format!("/tmp/openclaw-{}", uid));
-
+    // Find the lock directory (platform-specific)
+    let lock_dir = get_lock_dir();
     if !lock_dir.exists() {
         return;
     }
 
-    // Read all .lock files in the directory
+    // Read all .lock files
     let entries = match std::fs::read_dir(&lock_dir) {
         Ok(e) => e,
         Err(_) => return,
@@ -453,7 +452,6 @@ fn cleanup_stale_gateway(app: &tauri::AppHandle) {
         let content = match std::fs::read_to_string(&path) {
             Ok(c) => c,
             Err(_) => {
-                // Can't read — just remove it
                 let _ = std::fs::remove_file(&path);
                 continue;
             }
@@ -465,24 +463,12 @@ fn cleanup_stale_gateway(app: &tauri::AppHandle) {
             .map(|p| p as u32);
 
         if let Some(pid) = pid {
-            // Check if this PID is alive
-            let alive = unsafe { libc::kill(pid as i32, 0) == 0 };
-
-            if alive {
+            if is_process_alive(pid) {
                 let _ = app.emit("service-log", serde_json::json!({
                     "level": "info",
                     "message": format!("检测到已有 Gateway 进程 (pid {}), 正在关闭...", pid)
                 }));
-
-                // SIGTERM first (graceful)
-                unsafe { libc::kill(pid as i32, libc::SIGTERM); }
-                std::thread::sleep(std::time::Duration::from_secs(2));
-
-                // Check again — if still alive, SIGKILL
-                if unsafe { libc::kill(pid as i32, 0) == 0 } {
-                    unsafe { libc::kill(pid as i32, libc::SIGKILL); }
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                }
+                kill_process(pid);
             }
         }
 
@@ -490,24 +476,83 @@ fn cleanup_stale_gateway(app: &tauri::AppHandle) {
         let _ = std::fs::remove_file(&path);
     }
 
-    // Also kill gateway-watchdog.sh if running (it auto-restarts the gateway)
+    // Kill gateway-watchdog if running (Unix only, it auto-restarts the gateway)
     #[cfg(unix)]
     {
-        if let Ok(output) = std::process::Command::new("pkill")
+        let _ = std::process::Command::new("pkill")
             .args(["-f", "gateway-watchdog"])
-            .output()
-        {
-            if output.status.success() {
-                let _ = app.emit("service-log", serde_json::json!({
-                    "level": "info",
-                    "message": "已关闭 gateway-watchdog 守护进程"
-                }));
-            }
-        }
+            .output();
     }
 
-    // Brief pause for ports to be fully released by the OS
+    // Brief pause for ports to be fully released
     std::thread::sleep(std::time::Duration::from_millis(500));
+}
+
+/// Get the lock directory path (platform-specific)
+fn get_lock_dir() -> std::path::PathBuf {
+    #[cfg(unix)]
+    {
+        let uid = unsafe { libc::getuid() };
+        std::path::PathBuf::from(format!("/tmp/openclaw-{}", uid))
+    }
+    #[cfg(windows)]
+    {
+        let temp = std::env::var("TEMP").unwrap_or_else(|_| "C:\\Temp".to_string());
+        // On Windows, openclaw uses %TEMP%\openclaw-{username} or %TEMP%\openclaw
+        let username = std::env::var("USERNAME").unwrap_or_default();
+        let dir = std::path::PathBuf::from(&temp).join(format!("openclaw-{}", username));
+        if dir.exists() {
+            return dir;
+        }
+        // Fallback: scan for any openclaw-* dir in TEMP
+        if let Ok(entries) = std::fs::read_dir(&temp) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with("openclaw-") && entry.path().is_dir() {
+                    return entry.path();
+                }
+            }
+        }
+        std::path::PathBuf::from(temp).join("openclaw")
+    }
+}
+
+/// Check if a process is alive
+fn is_process_alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        unsafe { libc::kill(pid as i32, 0) == 0 }
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains(&pid.to_string()))
+            .unwrap_or(false)
+    }
+}
+
+/// Kill a process (graceful then force)
+fn kill_process(pid: u32) {
+    #[cfg(unix)]
+    {
+        // SIGTERM first (graceful)
+        unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        // If still alive, SIGKILL
+        if unsafe { libc::kill(pid as i32, 0) == 0 } {
+            unsafe { libc::kill(pid as i32, libc::SIGKILL); }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    }
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/PID", &pid.to_string()])
+            .output();
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
 }
 
 #[cfg(test)]
