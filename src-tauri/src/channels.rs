@@ -236,35 +236,76 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         .unwrap_or_else(|_| "node".to_string());
 
     let cli_dir = crate::environment::get_channel_cli_dir().ok();
-    let cli_bin_path = cli_dir.as_ref().and_then(|dir| {
-        let bin_name = match platform.as_str() {
-            "wechat" => "weixin-installer",
-            "feishu" => "openclaw-lark",
+
+    // Resolve the actual JS entry point (not .cmd/.sh wrappers — those break in Tauri sandbox)
+    let cli_js_entry = cli_dir.as_ref().and_then(|dir| {
+        let (pkg_name, bin_key) = match platform.as_str() {
+            "wechat" => ("weixin-installer", "weixin-installer"),
+            "feishu" => ("@larksuite/openclaw-lark", "openclaw-lark"),
             _ => return None,
         };
-        // On Windows: npm creates .cmd wrappers (bash scripts won't work with node)
-        // On Unix: the bash script in .bin/ is directly executable
-        let bin_path = if cfg!(target_os = "windows") {
-            dir.join("node_modules").join(".bin").join(format!("{}.cmd", bin_name))
+        // Read the package's package.json to find the real JS file
+        let pkg_dir = if pkg_name.starts_with('@') {
+            // Scoped package: @scope/name -> node_modules/@scope/name
+            let parts: Vec<&str> = pkg_name.splitn(2, '/').collect();
+            dir.join("node_modules").join(parts[0]).join(parts[1])
         } else {
-            dir.join("node_modules").join(".bin").join(bin_name)
+            dir.join("node_modules").join(pkg_name)
         };
-        if bin_path.exists() { Some(bin_path) } else { None }
+        let pkg_json_path = pkg_dir.join("package.json");
+        if !pkg_json_path.exists() { return None; }
+
+        let pkg_json: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&pkg_json_path).ok()?
+        ).ok()?;
+
+        // Get the bin entry: "bin": { "name": "./path/to/file.js" } or "bin": "./path.js"
+        let bin_file = match pkg_json.get("bin") {
+            Some(serde_json::Value::Object(map)) => {
+                map.get(bin_key)?.as_str().map(|s| s.to_string())
+            }
+            Some(serde_json::Value::String(s)) => Some(s.clone()),
+            _ => None,
+        }?;
+
+        let js_path = pkg_dir.join(&bin_file);
+        if js_path.exists() { Some(js_path) } else { None }
     });
 
+    // Build PATH that includes channel-cli/node_modules/.bin/ (for `openclaw` command)
+    let sandbox_path = {
+        let mut paths = vec![];
+        // Add sandboxed node directory
+        if let Ok(node_bin) = crate::environment::get_node_binary() {
+            if let Some(node_dir) = node_bin.parent() {
+                paths.push(node_dir.to_path_buf());
+            }
+        }
+        // Add channel-cli's .bin directory (contains openclaw, weixin-installer, etc.)
+        if let Some(ref dir) = cli_dir {
+            paths.push(dir.join("node_modules").join(".bin"));
+        }
+        // Append system PATH
+        if let Some(current) = std::env::var_os("PATH") {
+            paths.extend(std::env::split_paths(&current));
+        }
+        std::env::join_paths(paths).unwrap_or_default()
+    };
+
     // Spawn CLI process (triggers QR generation in the gateway)
-    let child = if let Some(bin_path) = cli_bin_path {
+    let child = if let Some(js_path) = cli_js_entry {
         let _ = app.emit("binding-progress", serde_json::json!({
             "platform": platform,
             "stage": "starting",
             "message": "正在启动绑定...",
         }));
-        // Run the CLI directly (it's a .cmd on Windows, executable script on Unix)
-        let mut cmd = tokio::process::Command::new(&bin_path);
-        cmd.arg("install")
+        // Run the JS entry directly with sandboxed node (bypasses .cmd/.sh wrappers)
+        let mut cmd = tokio::process::Command::new(&node_bin);
+        cmd.arg(js_path.to_string_lossy().to_string())
+            .arg("install")
+            .env("PATH", &sandbox_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        // On Windows, set CREATE_NO_WINDOW flag
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
@@ -283,11 +324,17 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         for part in pdef.install_cmd.split_whitespace() {
             args.push(part);
         }
-        tokio::process::Command::new(npx_cmd)
-            .args(&args)
+        let mut cmd = tokio::process::Command::new(npx_cmd);
+        cmd.args(&args)
+            .env("PATH", &sandbox_path)
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
+            .stderr(Stdio::piped());
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+        cmd.spawn()
             .map_err(|e| format!("启动 npx 失败: {}", e))?
     };
 
