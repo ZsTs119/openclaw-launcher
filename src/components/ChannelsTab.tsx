@@ -69,6 +69,8 @@ export function ChannelsTab() {
     useEffect(() => {
         checkNode();
         loadChannels();
+        // Pre-download CLI tools silently
+        invoke("ensure_channel_cli").catch(() => { });
     }, [checkNode, loadChannels]);
 
     // Listen for upgrade progress events

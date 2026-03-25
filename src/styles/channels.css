@@ -244,6 +244,62 @@
     text-align: center;
 }
 
+/* Guide */
+.binding-guide {
+    align-items: stretch;
+    text-align: left;
+}
+
+.binding-guide-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.binding-guide-header h4 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.binding-guide-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.binding-guide-steps li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.binding-guide-steps .step-number {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.binding-start-btn {
+    margin-top: 8px;
+    align-self: center;
+}
+
 /* Loading */
 .binding-loading {
     color: var(--text-secondary);

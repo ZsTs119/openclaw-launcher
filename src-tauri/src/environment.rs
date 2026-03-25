@@ -383,6 +383,123 @@ pub async fn upgrade_node(app: tauri::AppHandle) -> Result<String, String> {
     download_and_install_node(app).await
 }
 
+/// Get the directory where channel CLI packages are cached
+pub fn get_channel_cli_dir() -> Result<PathBuf, String> {
+    let dir = get_sandbox_dir()?.join("channel-cli");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create channel-cli dir: {}", e))?;
+    Ok(dir)
+}
+
+/// Check if a channel CLI is already installed in sandbox
+pub fn is_channel_cli_installed(pkg_name: &str) -> bool {
+    if let Ok(cli_dir) = get_channel_cli_dir() {
+        cli_dir.join("node_modules").join(pkg_name).exists()
+    } else {
+        false
+    }
+}
+
+/// Pre-download channel CLI packages to sandbox so binding is instant.
+/// Called when entering the Channels tab.
+#[tauri::command]
+pub async fn ensure_channel_cli(app: tauri::AppHandle) -> Result<String, String> {
+    let cli_dir = get_channel_cli_dir()?;
+    let node_bin = get_node_binary()?;
+    let npm_cli = get_npm_binary()?;
+
+    // Packages to ensure
+    let packages = [
+        "@tencent-weixin/openclaw-weixin-cli@latest",
+        "@larksuite/openclaw-lark@latest",
+    ];
+
+    // Check which packages need installing
+    let mut to_install: Vec<&str> = Vec::new();
+    for pkg in &packages {
+        let pkg_name = pkg.split('@').next().unwrap_or(pkg);
+        // Handle scoped packages: @scope/name
+        let dir_name = if pkg.starts_with('@') {
+            // e.g. "@tencent-weixin/openclaw-weixin-cli@latest" → "@tencent-weixin/openclaw-weixin-cli"
+            let without_version = pkg.rsplit_once('@').map(|(name, _)| name).unwrap_or(pkg);
+            without_version
+        } else {
+            pkg_name
+        };
+        if !cli_dir.join("node_modules").join(dir_name).exists() {
+            to_install.push(pkg);
+        }
+    }
+
+    if to_install.is_empty() {
+        return Ok("CLI 工具已就绪".to_string());
+    }
+
+    let _ = app.emit("channel-cli-progress", serde_json::json!({
+        "status": "downloading",
+        "message": format!("正在下载平台 CLI 工具 ({}/{})...", packages.len() - to_install.len(), packages.len()),
+    }));
+
+    // Create a minimal package.json if not exists
+    let pkg_json = cli_dir.join("package.json");
+    if !pkg_json.exists() {
+        std::fs::write(&pkg_json, r#"{"name":"channel-cli","private":true}"#)
+            .map_err(|e| format!("创建 package.json 失败: {}", e))?;
+    }
+
+    // Build npm install command: node npm-cli.js install pkg1 pkg2 --registry=...
+    let mut args = vec![
+        npm_cli.to_string_lossy().to_string(),
+        "install".to_string(),
+    ];
+    for pkg in &to_install {
+        args.push(pkg.to_string());
+    }
+    // Try China mirror first for faster downloads
+    args.push("--registry=https://registry.npmmirror.com".to_string());
+
+    let output = tokio::process::Command::new(&node_bin)
+        .args(&args)
+        .current_dir(&cli_dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| format!("npm install 失败: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Retry with official registry
+        let mut retry_args = vec![
+            npm_cli.to_string_lossy().to_string(),
+            "install".to_string(),
+        ];
+        for pkg in &to_install {
+            retry_args.push(pkg.to_string());
+        }
+
+        let retry_output = tokio::process::Command::new(&node_bin)
+            .args(&retry_args)
+            .current_dir(&cli_dir)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .await
+            .map_err(|e| format!("npm install (retry) 失败: {}", e))?;
+
+        if !retry_output.status.success() {
+            let retry_stderr = String::from_utf8_lossy(&retry_output.stderr);
+            return Err(format!("CLI 工具下载失败: {}\n{}", stderr, retry_stderr));
+        }
+    }
+
+    let _ = app.emit("channel-cli-progress", serde_json::json!({
+        "status": "ready",
+        "message": "CLI 工具已就绪",
+    }));
+
+    Ok("CLI 工具下载完成".to_string())
+}
+
 /// Extract a ZIP file
 fn extract_zip(archive_path: &PathBuf, dest: &PathBuf) -> Result<(), String> {
     let file = std::fs::File::open(archive_path)

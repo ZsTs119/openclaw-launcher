@@ -4,9 +4,9 @@
 
 use serde::Serialize;
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
-use std::process::{Child, Command, Stdio};
+use std::process::Stdio;
 use std::sync::Mutex;
+use tauri::Emitter;
 
 use crate::config::get_user_openclaw_dir;
 
@@ -32,7 +32,7 @@ pub struct BindingProgress {
 // ──────────────────────────────── Global state ─────────────────────────
 
 lazy_static::lazy_static! {
-    static ref BINDING_PROCESSES: Mutex<HashMap<String, Child>> = Mutex::new(HashMap::new());
+    static ref BINDING_PIDS: Mutex<HashMap<String, u32>> = Mutex::new(HashMap::new());
     static ref BINDING_QR_URLS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
@@ -146,7 +146,7 @@ pub fn check_node_version() -> Result<String, String> {
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| "node".to_string());
 
-    let output = Command::new(&node_cmd)
+    let output = std::process::Command::new(&node_cmd)
         .arg("--version")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -203,9 +203,9 @@ pub fn get_channel_status() -> Result<Vec<ChannelStatus>, String> {
     Ok(statuses)
 }
 
-/// Start binding process: spawn npx, capture stdout, extract QR URL
+/// Start binding process: use cached CLI or fallback to npx, async stdout with events
 #[tauri::command]
-pub fn start_channel_binding(platform: String) -> Result<String, String> {
+pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> Result<String, String> {
     let pdef = find_platform(&platform)?;
 
     if !pdef.available {
@@ -214,81 +214,151 @@ pub fn start_channel_binding(platform: String) -> Result<String, String> {
 
     // Check if already binding
     {
-        let procs = BINDING_PROCESSES.lock().unwrap();
-        if procs.contains_key(&platform) {
+        let pids = BINDING_PIDS.lock().unwrap();
+        if pids.contains_key(&platform) {
             return Err("绑定进程已在运行".to_string());
         }
     }
 
-    let npx_cmd = if cfg!(target_os = "windows") {
-        "npx.cmd"
+    let _ = app.emit("binding-progress", serde_json::json!({
+        "platform": platform,
+        "stage": "preparing",
+        "message": "正在准备 CLI 工具...",
+    }));
+
+    // Try sandbox cached CLI first, fallback to npx
+    let node_bin = crate::environment::get_node_binary()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| "node".to_string());
+
+    let cli_dir = crate::environment::get_channel_cli_dir().ok();
+    let cli_bin_path = cli_dir.as_ref().and_then(|dir| {
+        // Find the CLI binary in node_modules/.bin/
+        let bin_name = match platform.as_str() {
+            "wechat" => "weixin-installer",
+            "feishu" => "openclaw-lark",
+            _ => return None,
+        };
+        let bin_path = dir.join("node_modules").join(".bin").join(bin_name);
+        if bin_path.exists() { Some(bin_path) } else { None }
+    });
+
+    let mut child = if let Some(bin_path) = cli_bin_path {
+        // Use cached CLI: node <bin_path> install
+        let _ = app.emit("binding-progress", serde_json::json!({
+            "platform": platform,
+            "stage": "starting",
+            "message": "正在启动绑定...",
+        }));
+        tokio::process::Command::new(&node_bin)
+            .arg(bin_path.to_string_lossy().to_string())
+            .arg("install")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("启动 CLI 失败: {}", e))?
     } else {
-        "npx"
+        // Fallback: npx (slower, needs download)
+        let _ = app.emit("binding-progress", serde_json::json!({
+            "platform": platform,
+            "stage": "downloading",
+            "message": "正在下载 CLI 工具（首次使用）...",
+        }));
+        let npx_cmd = if cfg!(target_os = "windows") { "npx.cmd" } else { "npx" };
+        let mut args: Vec<&str> = vec!["-y"];
+        for part in pdef.install_cmd.split_whitespace() {
+            args.push(part);
+        }
+        tokio::process::Command::new(npx_cmd)
+            .args(&args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("启动 npx 失败: {}", e))?
     };
 
-    // Build args: npx -y @package install
-    let mut args: Vec<&str> = vec!["-y"];
-    for part in pdef.install_cmd.split_whitespace() {
-        args.push(part);
-    }
+    let _ = app.emit("binding-progress", serde_json::json!({
+        "platform": platform,
+        "stage": "waiting_qr",
+        "message": "正在生成二维码...",
+    }));
 
-    let mut child = Command::new(npx_cmd)
-        .args(&args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("启动绑定进程失败: {}", e))?;
-
-    // Read stdout in a blocking manner to find the QR URL
-    // We'll read up to 60 lines or 15 seconds, whichever comes first
+    // Async stdout reading with 90s timeout
     let stdout = child.stdout.take().ok_or("无法读取进程输出")?;
-    let reader = BufReader::new(stdout);
     let url_regex = regex_lite::Regex::new(r"https?://\S+").unwrap();
 
-    let mut found_url: Option<String> = None;
-    let mut line_count = 0;
+    let read_future = async {
+        use tokio::io::{AsyncBufReadExt, BufReader};
+        let reader = BufReader::new(stdout);
+        let mut lines = reader.lines();
+        let mut line_count = 0u32;
 
-    for line in reader.lines() {
-        line_count += 1;
-        if line_count > 200 {
-            break;
-        }
-        match line {
-            Ok(text) => {
-                if let Some(mat) = url_regex.find(&text) {
-                    found_url = Some(mat.as_str().to_string());
-                    break;
-                }
+        while let Ok(Some(line)) = lines.next_line().await {
+            line_count += 1;
+            if line_count > 500 { break; }
+            if let Some(mat) = url_regex.find(&line) {
+                return Some(mat.as_str().to_string());
             }
-            Err(_) => break,
         }
+        None
+    };
+
+    let found_url: Option<String> = tokio::time::timeout(
+        std::time::Duration::from_secs(90),
+        read_future,
+    ).await
+    .unwrap_or(None); // timeout → None
+
+    // Track child process via PID for cancel/poll
+    let child_id = child.id();
+
+    // Keep child alive via background task
+    {
+        // Wait for child exit and emit event
+        let platform_clone = platform.clone();
+        let app_clone = app.clone();
+        tokio::spawn(async move {
+            let _ = child.wait().await;
+            let _ = app_clone.emit("binding-progress", serde_json::json!({
+                "platform": platform_clone,
+                "stage": "process_ended",
+                "message": "CLI 进程已结束",
+            }));
+        });
     }
 
-    // Store process for later polling/cancelling
-    {
-        let mut procs = BINDING_PROCESSES.lock().unwrap();
-        procs.insert(platform.clone(), child);
+    // Store the child pid for cancel
+    if let Some(pid) = child_id {
+        let mut procs = BINDING_PIDS.lock().unwrap();
+        procs.insert(platform.clone(), pid);
     }
 
     match found_url {
         Some(url) => {
+            let _ = app.emit("binding-progress", serde_json::json!({
+                "platform": platform,
+                "stage": "qr_ready",
+                "message": "二维码已生成，请扫码",
+            }));
             let mut urls = BINDING_QR_URLS.lock().unwrap();
-            urls.insert(platform, url.clone());
+            urls.insert(platform.clone(), url.clone());
             Ok(url)
         }
-        None => Err("未能从 CLI 输出中提取二维码链接，请尝试在终端手动执行".to_string()),
+        None => {
+            let cmd_hint = format!("npx -y {} ", pdef.install_cmd);
+            Err(format!("未能提取二维码链接。请在终端执行：{}", cmd_hint))
+        }
     }
 }
 
-/// Poll binding result: check if process ended + config changed
+/// Poll binding result: check if config changed (process tracked via events now)
 #[tauri::command]
 pub fn poll_binding_result(platform: String) -> Result<BindingProgress, String> {
     let pdef = find_platform(&platform)?;
 
-    // Check config first
+    // Check config for successful binding
     let config = read_config()?;
     if is_channel_bound(&config, pdef.config_key) {
-        // Clean up process
         cleanup_binding(&platform);
         return Ok(BindingProgress {
             status: "success".to_string(),
@@ -297,47 +367,36 @@ pub fn poll_binding_result(platform: String) -> Result<BindingProgress, String> 
         });
     }
 
-    // Check process status
-    let mut procs = BINDING_PROCESSES.lock().unwrap();
-    if let Some(child) = procs.get_mut(&platform) {
-        match child.try_wait() {
-            Ok(Some(exit_status)) => {
-                procs.remove(&platform);
-                if exit_status.success() {
-                    // Re-check config after exit
-                    drop(procs);
-                    let config2 = read_config()?;
-                    if is_channel_bound(&config2, pdef.config_key) {
-                        return Ok(BindingProgress {
-                            status: "success".to_string(),
-                            qr_url: None,
-                            message: Some(format!("{} 绑定成功！", pdef.name)),
-                        });
-                    }
-                }
-                Ok(BindingProgress {
-                    status: "expired".to_string(),
+    // Check if process is still alive via pid
+    let pids = BINDING_PIDS.lock().unwrap();
+    if let Some(&pid) = pids.get(&platform) {
+        // Check if process is still running
+        let still_running = is_pid_alive(pid);
+        if still_running {
+            let urls = BINDING_QR_URLS.lock().unwrap();
+            Ok(BindingProgress {
+                status: "pending".to_string(),
+                qr_url: urls.get(&platform).cloned(),
+                message: Some("等待扫码...".to_string()),
+            })
+        } else {
+            drop(pids);
+            // Process ended, re-check config
+            let config2 = read_config()?;
+            if is_channel_bound(&config2, pdef.config_key) {
+                cleanup_binding(&platform);
+                return Ok(BindingProgress {
+                    status: "success".to_string(),
                     qr_url: None,
-                    message: Some("二维码已过期，请重新生成".to_string()),
-                })
+                    message: Some(format!("{} 绑定成功！", pdef.name)),
+                });
             }
-            Ok(None) => {
-                // Still running, waiting for scan
-                let urls = BINDING_QR_URLS.lock().unwrap();
-                Ok(BindingProgress {
-                    status: "pending".to_string(),
-                    qr_url: urls.get(&platform).cloned(),
-                    message: Some("等待扫码...".to_string()),
-                })
-            }
-            Err(e) => {
-                procs.remove(&platform);
-                Ok(BindingProgress {
-                    status: "error".to_string(),
-                    qr_url: None,
-                    message: Some(format!("进程异常: {}", e)),
-                })
-            }
+            cleanup_binding(&platform);
+            Ok(BindingProgress {
+                status: "expired".to_string(),
+                qr_url: None,
+                message: Some("二维码已过期，请重新生成".to_string()),
+            })
         }
     } else {
         Ok(BindingProgress {
@@ -374,11 +433,42 @@ pub fn unbind_channel(platform: String) -> Result<(), String> {
 // ──────────────────────────────── Internal helpers ────────────────────
 
 fn cleanup_binding(platform: &str) {
-    let mut procs = BINDING_PROCESSES.lock().unwrap();
-    if let Some(mut child) = procs.remove(platform) {
-        let _ = child.kill();
-        let _ = child.wait();
+    let mut pids = BINDING_PIDS.lock().unwrap();
+    if let Some(pid) = pids.remove(platform) {
+        kill_pid(pid);
     }
     let mut urls = BINDING_QR_URLS.lock().unwrap();
     urls.remove(platform);
+}
+
+/// Check if a process with given PID is still alive
+fn is_pid_alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        // kill(pid, 0) checks if process exists without sending a signal
+        unsafe { libc::kill(pid as i32, 0) == 0 }
+    }
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains(&pid.to_string()))
+            .unwrap_or(false)
+    }
+}
+
+/// Kill a process by PID
+fn kill_pid(pid: u32) {
+    #[cfg(unix)]
+    {
+        unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+    }
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .output();
+    }
 }

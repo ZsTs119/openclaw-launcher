@@ -114,6 +114,7 @@ pub fn run() {
             environment::check_node_exists,
             environment::download_and_install_node,
             environment::upgrade_node,
+            environment::ensure_channel_cli,
             environment::get_environment_info,
             // Download
             download::download_openclaw_source,

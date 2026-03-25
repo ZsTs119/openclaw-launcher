@@ -2480,6 +2480,7 @@ dependencies = [
  "dirs",
  "futures-util",
  "lazy_static",
+ "libc",
  "open",
  "regex-lite",
  "reqwest 0.12.28",
