@@ -222,7 +222,7 @@ pub async fn start_service(
     // Pre-build Control UI if missing (fixes Windows space-in-path issue)
     ensure_control_ui_built(&app);
 
-    // Check if already running
+    // Check if already running (managed by this Launcher instance)
     {
         let mut guard = state.child.lock().unwrap();
         if let Some(child) = guard.as_mut() {
@@ -231,6 +231,9 @@ pub async fn start_service(
             }
         }
     }
+
+    // Clean up any pre-existing gateway processes and stale locks
+    cleanup_stale_gateway(&app);
 
     // Get paths
     let node_bin = environment::get_node_binary()?;
@@ -419,6 +422,92 @@ fn is_service_ready_signal(line: &str) -> bool {
     let lower = line.to_lowercase();
     lower.contains("listening") || lower.contains("started on") || lower.contains("ready on")
         || lower.contains("server is running") || lower.contains("server started")
+}
+
+/// Kill any pre-existing gateway processes and remove stale lock files.
+///
+/// This prevents the "gateway already running; lock timeout after 5000ms" error
+/// that occurs when a gateway from a previous session (manual start, watchdog,
+/// or crashed Launcher) is still running.
+fn cleanup_stale_gateway(app: &tauri::AppHandle) {
+    let uid = unsafe { libc::getuid() };
+    let lock_dir = std::path::PathBuf::from(format!("/tmp/openclaw-{}", uid));
+
+    if !lock_dir.exists() {
+        return;
+    }
+
+    // Read all .lock files in the directory
+    let entries = match std::fs::read_dir(&lock_dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.extension().map_or(false, |ext| ext == "lock") {
+            continue;
+        }
+
+        // Parse the lock file JSON to get the PID
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => {
+                // Can't read — just remove it
+                let _ = std::fs::remove_file(&path);
+                continue;
+            }
+        };
+
+        let pid: Option<u32> = serde_json::from_str::<serde_json::Value>(&content)
+            .ok()
+            .and_then(|v| v.get("pid")?.as_u64())
+            .map(|p| p as u32);
+
+        if let Some(pid) = pid {
+            // Check if this PID is alive
+            let alive = unsafe { libc::kill(pid as i32, 0) == 0 };
+
+            if alive {
+                let _ = app.emit("service-log", serde_json::json!({
+                    "level": "info",
+                    "message": format!("检测到已有 Gateway 进程 (pid {}), 正在关闭...", pid)
+                }));
+
+                // SIGTERM first (graceful)
+                unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+                std::thread::sleep(std::time::Duration::from_secs(2));
+
+                // Check again — if still alive, SIGKILL
+                if unsafe { libc::kill(pid as i32, 0) == 0 } {
+                    unsafe { libc::kill(pid as i32, libc::SIGKILL); }
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                }
+            }
+        }
+
+        // Remove the lock file regardless
+        let _ = std::fs::remove_file(&path);
+    }
+
+    // Also kill gateway-watchdog.sh if running (it auto-restarts the gateway)
+    #[cfg(unix)]
+    {
+        if let Ok(output) = std::process::Command::new("pkill")
+            .args(["-f", "gateway-watchdog"])
+            .output()
+        {
+            if output.status.success() {
+                let _ = app.emit("service-log", serde_json::json!({
+                    "level": "info",
+                    "message": "已关闭 gateway-watchdog 守护进程"
+                }));
+            }
+        }
+    }
+
+    // Brief pause for ports to be fully released by the OS
+    std::thread::sleep(std::time::Duration::from_millis(500));
 }
 
 #[cfg(test)]
