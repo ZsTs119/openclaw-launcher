@@ -306,37 +306,71 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         });
     }
 
-    // ── Extract QR URL from `openclaw logs --json` ──
-    // The CLI triggers QR generation in the gateway. The QR URL is logged as:
-    //   "二维码链接: https://liteapp.weixin.qq.com/q/..."
-    // We tail the openclaw log stream to capture it.
-    let openclaw_bin = which_openclaw()?;
-    let mut log_child = tokio::process::Command::new(&openclaw_bin)
-        .args(["logs", "--json"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("启动 openclaw logs 失败: {}", e))?;
+    // ── Extract QR URL by tailing the openclaw log file ──
+    // The CLI triggers QR generation in the gateway. The QR URL is logged as JSON:
+    //   {"1":"二维码链接: https://liteapp.weixin.qq.com/q/..."}
+    // Log file: /tmp/openclaw/openclaw-YYYY-MM-DD.log
+    let today = {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let days = (now / 86400) as i64;
+        let (year, month, day) = civil_from_days(days);
+        format!("{:04}-{:02}-{:02}", year, month, day)
+    };
+    let log_path = std::path::PathBuf::from(format!("/tmp/openclaw/openclaw-{}.log", today));
 
-    let log_stdout = log_child.stdout.take().ok_or("无法读取日志输出")?;
+    if !log_path.exists() {
+        return Err("OpenClaw 日志文件不存在。请确保服务已启动。".to_string());
+    }
+
+    // Record current file size — we only want NEW entries after CLI starts
+    let initial_size = std::fs::metadata(&log_path)
+        .map(|m| m.len())
+        .unwrap_or(0);
+
     let qr_url_regex = regex_lite::Regex::new(r"二维码链接:\s*(https?://\S+)").unwrap();
+    let log_path_clone = log_path.clone();
 
-    let read_log_future = async {
-        use tokio::io::{AsyncBufReadExt, BufReader};
-        let reader = BufReader::new(log_stdout);
-        let mut lines = reader.lines();
-        let mut line_count = 0u32;
+    let read_log_future = async move {
+        // Poll the log file for new content
+        let mut last_pos = initial_size;
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-        while let Ok(Some(line)) = lines.next_line().await {
-            line_count += 1;
-            if line_count > 2000 { break; }
-            if let Some(caps) = qr_url_regex.captures(&line) {
-                if let Some(url_match) = caps.get(1) {
-                    return Some(url_match.as_str().to_string());
+            let current_size = tokio::fs::metadata(&log_path_clone).await
+                .map(|m| m.len())
+                .unwrap_or(0);
+
+            if current_size <= last_pos {
+                continue;
+            }
+
+            // Read new bytes
+            let mut file = match tokio::fs::File::open(&log_path_clone).await {
+                Ok(f) => f,
+                Err(_) => continue,
+            };
+            use tokio::io::{AsyncReadExt, AsyncSeekExt};
+            if file.seek(std::io::SeekFrom::Start(last_pos)).await.is_err() {
+                continue;
+            }
+            let mut buf = vec![0u8; (current_size - last_pos) as usize];
+            if file.read_exact(&mut buf).await.is_err() {
+                continue;
+            }
+            last_pos = current_size;
+
+            let text = String::from_utf8_lossy(&buf);
+            for line in text.lines() {
+                if let Some(caps) = qr_url_regex.captures(line) {
+                    if let Some(url_match) = caps.get(1) {
+                        return Some(url_match.as_str().to_string());
+                    }
                 }
             }
         }
-        None
     };
 
     // 120s timeout — feishu plugin install takes 60s+
@@ -345,9 +379,6 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         read_log_future,
     ).await
     .unwrap_or(None);
-
-    // Kill the log tail process
-    let _ = log_child.kill().await;
 
     match found_url {
         Some(url) => {
@@ -448,54 +479,20 @@ pub fn unbind_channel(platform: String) -> Result<(), String> {
 
 // ──────────────────────────────── Internal helpers ────────────────────
 
-/// Find the `openclaw` binary on the system.
-/// Tauri processes don't have nvm/shell environment, so we derive the path
-/// from the sandbox node binary or scan known locations.
-fn which_openclaw() -> Result<String, String> {
-    // 1. Derive from sandbox node binary (most reliable)
-    //    If sandbox node is at .../node-v22/bin/node, openclaw might be installed
-    //    globally in the same nvm prefix
-    if let Ok(node_bin) = crate::environment::get_node_binary() {
-        if let Some(bin_dir) = node_bin.parent() {
-            // Check sibling: .../bin/openclaw
-            let oc = bin_dir.join("openclaw");
-            if oc.exists() {
-                return Ok(oc.to_string_lossy().to_string());
-            }
-            // If sandbox node doesn't have it, check the nvm node that has it
-            // nvm structure: ~/.nvm/versions/node/vXX/bin/
-        }
-    }
-
-    // 2. Scan all nvm versions for openclaw
-    if let Ok(home) = std::env::var("HOME") {
-        let nvm_dir = std::path::PathBuf::from(&home).join(".nvm/versions/node");
-        if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
-            for entry in entries.flatten() {
-                let oc = entry.path().join("bin/openclaw");
-                if oc.exists() {
-                    return Ok(oc.to_string_lossy().to_string());
-                }
-            }
-        }
-    }
-
-    // 3. Check common global npm paths
-    if let Ok(home) = std::env::var("HOME") {
-        let candidates = [
-            format!("{}/.local/share/npm/bin/openclaw", home),
-            format!("{}/.npm-global/bin/openclaw", home),
-            "/usr/local/bin/openclaw".to_string(),
-            "/usr/bin/openclaw".to_string(),
-        ];
-        for path in &candidates {
-            if std::path::Path::new(path).exists() {
-                return Ok(path.clone());
-            }
-        }
-    }
-
-    Err("未找到 openclaw 命令。请确保 OpenClaw 已安装。".to_string())
+/// Convert days since Unix epoch to (year, month, day).
+/// Based on Howard Hinnant's algorithm (public domain).
+fn civil_from_days(days: i64) -> (i32, u32, u32) {
+    let z = days + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u32;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y as i32, m, d)
 }
 
 fn cleanup_binding(platform: &str) {
