@@ -449,34 +449,48 @@ pub fn unbind_channel(platform: String) -> Result<(), String> {
 // ──────────────────────────────── Internal helpers ────────────────────
 
 /// Find the `openclaw` binary on the system.
-/// Looks in: nvm node_modules, sandbox node, system PATH.
+/// Tauri processes don't have nvm/shell environment, so we derive the path
+/// from the sandbox node binary or scan known locations.
 fn which_openclaw() -> Result<String, String> {
-    // Try nvm global modules first (most common on dev machines)
-    if let Ok(home) = std::env::var("HOME") {
-        let nvm_bin = std::path::PathBuf::from(&home)
-            .join(".nvm/versions/node")
-            .read_dir()
-            .ok()
-            .and_then(|mut entries| {
-                entries.find_map(|e| {
-                    let path = e.ok()?.path().join("bin/openclaw");
-                    if path.exists() { Some(path) } else { None }
-                })
-            });
-        if let Some(bin) = nvm_bin {
-            return Ok(bin.to_string_lossy().to_string());
+    // 1. Derive from sandbox node binary (most reliable)
+    //    If sandbox node is at .../node-v22/bin/node, openclaw might be installed
+    //    globally in the same nvm prefix
+    if let Ok(node_bin) = crate::environment::get_node_binary() {
+        if let Some(bin_dir) = node_bin.parent() {
+            // Check sibling: .../bin/openclaw
+            let oc = bin_dir.join("openclaw");
+            if oc.exists() {
+                return Ok(oc.to_string_lossy().to_string());
+            }
+            // If sandbox node doesn't have it, check the nvm node that has it
+            // nvm structure: ~/.nvm/versions/node/vXX/bin/
         }
     }
 
-    // Try system PATH
-    if let Ok(output) = std::process::Command::new("which")
-        .arg("openclaw")
-        .output()
-    {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return Ok(path);
+    // 2. Scan all nvm versions for openclaw
+    if let Ok(home) = std::env::var("HOME") {
+        let nvm_dir = std::path::PathBuf::from(&home).join(".nvm/versions/node");
+        if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
+            for entry in entries.flatten() {
+                let oc = entry.path().join("bin/openclaw");
+                if oc.exists() {
+                    return Ok(oc.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    // 3. Check common global npm paths
+    if let Ok(home) = std::env::var("HOME") {
+        let candidates = [
+            format!("{}/.local/share/npm/bin/openclaw", home),
+            format!("{}/.npm-global/bin/openclaw", home),
+            "/usr/local/bin/openclaw".to_string(),
+            "/usr/bin/openclaw".to_string(),
+        ];
+        for path in &candidates {
+            if std::path::Path::new(path).exists() {
+                return Ok(path.clone());
             }
         }
     }
