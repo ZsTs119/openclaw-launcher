@@ -242,7 +242,13 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
             "feishu" => "openclaw-lark",
             _ => return None,
         };
-        let bin_path = dir.join("node_modules").join(".bin").join(bin_name);
+        // On Windows: npm creates .cmd wrappers (bash scripts won't work with node)
+        // On Unix: the bash script in .bin/ is directly executable
+        let bin_path = if cfg!(target_os = "windows") {
+            dir.join("node_modules").join(".bin").join(format!("{}.cmd", bin_name))
+        } else {
+            dir.join("node_modules").join(".bin").join(bin_name)
+        };
         if bin_path.exists() { Some(bin_path) } else { None }
     });
 
@@ -253,12 +259,18 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
             "stage": "starting",
             "message": "正在启动绑定...",
         }));
-        tokio::process::Command::new(&node_bin)
-            .arg(bin_path.to_string_lossy().to_string())
-            .arg("install")
+        // Run the CLI directly (it's a .cmd on Windows, executable script on Unix)
+        let mut cmd = tokio::process::Command::new(&bin_path);
+        cmd.arg("install")
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
+            .stderr(Stdio::piped());
+        // On Windows, set CREATE_NO_WINDOW flag
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+        cmd.spawn()
             .map_err(|e| format!("启动 CLI 失败: {}", e))?
     } else {
         let _ = app.emit("binding-progress", serde_json::json!({
