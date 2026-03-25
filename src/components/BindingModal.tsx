@@ -46,6 +46,15 @@ export function BindingModal({ platformId, platformName, onClose }: BindingModal
         setProgressMsg("正在准备 CLI 工具...");
 
         try {
+            // Check if gateway is running (required for binding)
+            const running = await invoke<boolean>("is_service_running");
+            if (!running) {
+                if (closedRef.current) return;
+                setErrorMsg("请先在仪表盘启动 OpenClaw 服务");
+                setStage("error");
+                return;
+            }
+
             const url = await invoke<string>("start_channel_binding", { platform: platformId });
             if (closedRef.current) return;
             setQrUrl(url);

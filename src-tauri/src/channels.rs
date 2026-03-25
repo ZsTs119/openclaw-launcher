@@ -203,7 +203,11 @@ pub fn get_channel_status() -> Result<Vec<ChannelStatus>, String> {
     Ok(statuses)
 }
 
-/// Start binding process: use cached CLI or fallback to npx, async stdout with events
+/// Start binding process: spawn CLI, then tail `openclaw logs --json` for the QR URL.
+///
+/// The CLI tools output ASCII art QR codes to stdout (not parseable URLs).
+/// The actual QR URL is logged via OpenClaw's logger as `二维码链接: <url>`.
+/// We read it from `openclaw logs --json` which streams structured log entries.
 #[tauri::command]
 pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> Result<String, String> {
     let pdef = find_platform(&platform)?;
@@ -233,7 +237,6 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
 
     let cli_dir = crate::environment::get_channel_cli_dir().ok();
     let cli_bin_path = cli_dir.as_ref().and_then(|dir| {
-        // Find the CLI binary in node_modules/.bin/
         let bin_name = match platform.as_str() {
             "wechat" => "weixin-installer",
             "feishu" => "openclaw-lark",
@@ -243,8 +246,8 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         if bin_path.exists() { Some(bin_path) } else { None }
     });
 
-    let mut child = if let Some(bin_path) = cli_bin_path {
-        // Use cached CLI: node <bin_path> install
+    // Spawn CLI process (triggers QR generation in the gateway)
+    let child = if let Some(bin_path) = cli_bin_path {
         let _ = app.emit("binding-progress", serde_json::json!({
             "platform": platform,
             "stage": "starting",
@@ -258,7 +261,6 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
             .spawn()
             .map_err(|e| format!("启动 CLI 失败: {}", e))?
     } else {
-        // Fallback: npx (slower, needs download)
         let _ = app.emit("binding-progress", serde_json::json!({
             "platform": platform,
             "stage": "downloading",
@@ -283,42 +285,19 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         "message": "正在生成二维码...",
     }));
 
-    // Async stdout reading with 90s timeout
-    let stdout = child.stdout.take().ok_or("无法读取进程输出")?;
-    let url_regex = regex_lite::Regex::new(r"https?://\S+").unwrap();
-
-    let read_future = async {
-        use tokio::io::{AsyncBufReadExt, BufReader};
-        let reader = BufReader::new(stdout);
-        let mut lines = reader.lines();
-        let mut line_count = 0u32;
-
-        while let Ok(Some(line)) = lines.next_line().await {
-            line_count += 1;
-            if line_count > 500 { break; }
-            if let Some(mat) = url_regex.find(&line) {
-                return Some(mat.as_str().to_string());
-            }
-        }
-        None
-    };
-
-    let found_url: Option<String> = tokio::time::timeout(
-        std::time::Duration::from_secs(90),
-        read_future,
-    ).await
-    .unwrap_or(None); // timeout → None
-
-    // Track child process via PID for cancel/poll
+    // Track child PID
     let child_id = child.id();
+    if let Some(pid) = child_id {
+        let mut procs = BINDING_PIDS.lock().unwrap();
+        procs.insert(platform.clone(), pid);
+    }
 
-    // Keep child alive via background task
+    // Keep CLI child alive in background — it handles QR polling internally
     {
-        // Wait for child exit and emit event
         let platform_clone = platform.clone();
         let app_clone = app.clone();
         tokio::spawn(async move {
-            let _ = child.wait().await;
+            let _ = child.wait_with_output().await;
             let _ = app_clone.emit("binding-progress", serde_json::json!({
                 "platform": platform_clone,
                 "stage": "process_ended",
@@ -327,11 +306,48 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         });
     }
 
-    // Store the child pid for cancel
-    if let Some(pid) = child_id {
-        let mut procs = BINDING_PIDS.lock().unwrap();
-        procs.insert(platform.clone(), pid);
-    }
+    // ── Extract QR URL from `openclaw logs --json` ──
+    // The CLI triggers QR generation in the gateway. The QR URL is logged as:
+    //   "二维码链接: https://liteapp.weixin.qq.com/q/..."
+    // We tail the openclaw log stream to capture it.
+    let openclaw_bin = which_openclaw()?;
+    let mut log_child = tokio::process::Command::new(&openclaw_bin)
+        .args(["logs", "--json"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("启动 openclaw logs 失败: {}", e))?;
+
+    let log_stdout = log_child.stdout.take().ok_or("无法读取日志输出")?;
+    let qr_url_regex = regex_lite::Regex::new(r"二维码链接:\s*(https?://\S+)").unwrap();
+
+    let read_log_future = async {
+        use tokio::io::{AsyncBufReadExt, BufReader};
+        let reader = BufReader::new(log_stdout);
+        let mut lines = reader.lines();
+        let mut line_count = 0u32;
+
+        while let Ok(Some(line)) = lines.next_line().await {
+            line_count += 1;
+            if line_count > 2000 { break; }
+            if let Some(caps) = qr_url_regex.captures(&line) {
+                if let Some(url_match) = caps.get(1) {
+                    return Some(url_match.as_str().to_string());
+                }
+            }
+        }
+        None
+    };
+
+    // 120s timeout — feishu plugin install takes 60s+
+    let found_url: Option<String> = tokio::time::timeout(
+        std::time::Duration::from_secs(120),
+        read_log_future,
+    ).await
+    .unwrap_or(None);
+
+    // Kill the log tail process
+    let _ = log_child.kill().await;
 
     match found_url {
         Some(url) => {
@@ -346,7 +362,7 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         }
         None => {
             let cmd_hint = format!("npx -y {} ", pdef.install_cmd);
-            Err(format!("未能提取二维码链接。请在终端执行：{}", cmd_hint))
+            Err(format!("未能提取二维码链接（超时）。请在终端执行：{}", cmd_hint))
         }
     }
 }
@@ -431,6 +447,42 @@ pub fn unbind_channel(platform: String) -> Result<(), String> {
 }
 
 // ──────────────────────────────── Internal helpers ────────────────────
+
+/// Find the `openclaw` binary on the system.
+/// Looks in: nvm node_modules, sandbox node, system PATH.
+fn which_openclaw() -> Result<String, String> {
+    // Try nvm global modules first (most common on dev machines)
+    if let Ok(home) = std::env::var("HOME") {
+        let nvm_bin = std::path::PathBuf::from(&home)
+            .join(".nvm/versions/node")
+            .read_dir()
+            .ok()
+            .and_then(|mut entries| {
+                entries.find_map(|e| {
+                    let path = e.ok()?.path().join("bin/openclaw");
+                    if path.exists() { Some(path) } else { None }
+                })
+            });
+        if let Some(bin) = nvm_bin {
+            return Ok(bin.to_string_lossy().to_string());
+        }
+    }
+
+    // Try system PATH
+    if let Ok(output) = std::process::Command::new("which")
+        .arg("openclaw")
+        .output()
+    {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return Ok(path);
+            }
+        }
+    }
+
+    Err("未找到 openclaw 命令。请确保 OpenClaw 已安装。".to_string())
+}
 
 fn cleanup_binding(platform: &str) {
     let mut pids = BINDING_PIDS.lock().unwrap();
