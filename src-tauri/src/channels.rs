@@ -292,25 +292,65 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         procs.insert(platform.clone(), pid);
     }
 
-    // Keep CLI child alive in background — it handles QR polling internally
-    {
-        let platform_clone = platform.clone();
-        let app_clone = app.clone();
-        tokio::spawn(async move {
-            let _ = child.wait_with_output().await;
-            let _ = app_clone.emit("binding-progress", serde_json::json!({
-                "platform": platform_clone,
-                "stage": "process_ended",
-                "message": "CLI 进程已结束",
-            }));
-        });
-    }
+    // ── Strategy: try TWO sources for the QR URL ──
+    // Source 1: CLI process output (stdout + stderr) — some CLIs print the URL directly
+    // Source 2: Gateway log file — the gateway always logs "二维码链接: <url>"
+    //
+    // We race both sources. Also capture CLI stderr for error reporting.
 
-    // ── Extract QR URL by tailing the openclaw log file ──
-    // The CLI triggers QR generation in the gateway. The QR URL is logged as JSON:
-    //   {"1":"二维码链接: https://liteapp.weixin.qq.com/q/..."}
-    // Log file: /tmp/openclaw/openclaw-YYYY-MM-DD.log (Linux)
-    //           C:\tmp\openclaw\openclaw-YYYY-MM-DD.log (Windows)
+    let qr_url_regex = regex_lite::Regex::new(r"二维码链接:\s*(https?://\S+)").unwrap();
+    let url_regex = regex_lite::Regex::new(r"https?://\S+").unwrap();
+
+    // Source 1: Wait for CLI process and scan its output
+    let cli_regex = qr_url_regex.clone();
+    let cli_url_regex = url_regex.clone();
+    let cli_platform = platform.clone();
+    let cli_app = app.clone();
+    let cli_handle = tokio::spawn(async move {
+        let output = child.wait_with_output().await;
+        match output {
+            Ok(out) => {
+                let stdout_str = String::from_utf8_lossy(&out.stdout);
+                let stderr_str = String::from_utf8_lossy(&out.stderr);
+                let combined = format!("{}\n{}", stdout_str, stderr_str);
+
+                // Emit stderr for diagnostics
+                if !stderr_str.is_empty() {
+                    let snippet: String = stderr_str.chars().take(300).collect();
+                    let _ = cli_app.emit("binding-progress", serde_json::json!({
+                        "platform": cli_platform,
+                        "stage": "cli_output",
+                        "message": format!("CLI: {}", snippet),
+                    }));
+                }
+
+                // Search for QR URL in CLI output
+                if let Some(caps) = cli_regex.captures(&combined) {
+                    if let Some(url_match) = caps.get(1) {
+                        return (Some(url_match.as_str().to_string()), None);
+                    }
+                }
+                // Fallback: any URL in output
+                if let Some(mat) = cli_url_regex.find(&combined) {
+                    let url = mat.as_str().to_string();
+                    if url.contains("weixin.qq.com") || url.contains("feishu") || url.contains("lark") {
+                        return (Some(url), None);
+                    }
+                }
+
+                // CLI exited without QR URL — report error
+                let exit_code = out.status.code().unwrap_or(-1);
+                if !out.status.success() {
+                    let err_msg: String = stderr_str.chars().take(200).collect();
+                    return (None, Some(format!("CLI 退出码 {} : {}", exit_code, err_msg)));
+                }
+                (None, None)
+            }
+            Err(e) => (None, Some(format!("CLI 进程异常: {}", e))),
+        }
+    });
+
+    // Source 2: Tail the gateway log file for QR URL
     let today = {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -323,33 +363,29 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
     let log_filename = format!("openclaw-{}.log", today);
     let log_path = get_openclaw_log_dir().join(&log_filename);
 
-    if !log_path.exists() {
-        return Err("OpenClaw 日志文件不存在。请确保服务已启动。".to_string());
-    }
-
-    // Record current file size — we only want NEW entries after CLI starts
     let initial_size = std::fs::metadata(&log_path)
         .map(|m| m.len())
         .unwrap_or(0);
 
-    let qr_url_regex = regex_lite::Regex::new(r"二维码链接:\s*(https?://\S+)").unwrap();
+    let log_regex = qr_url_regex.clone();
     let log_path_clone = log_path.clone();
-
-    let read_log_future = async move {
-        // Poll the log file for new content
+    let log_handle = tokio::spawn(async move {
+        if !log_path_clone.exists() {
+            // Wait a few seconds for log file to be created
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            if !log_path_clone.exists() {
+                return None;
+            }
+        }
         let mut last_pos = initial_size;
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
             let current_size = tokio::fs::metadata(&log_path_clone).await
                 .map(|m| m.len())
                 .unwrap_or(0);
-
             if current_size <= last_pos {
                 continue;
             }
-
-            // Read new bytes
             let mut file = match tokio::fs::File::open(&log_path_clone).await {
                 Ok(f) => f,
                 Err(_) => continue,
@@ -363,22 +399,44 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
                 continue;
             }
             last_pos = current_size;
-
             let text = String::from_utf8_lossy(&buf);
             for line in text.lines() {
-                if let Some(caps) = qr_url_regex.captures(line) {
+                if let Some(caps) = log_regex.captures(line) {
                     if let Some(url_match) = caps.get(1) {
                         return Some(url_match.as_str().to_string());
                     }
                 }
             }
         }
-    };
+    });
 
-    // 120s timeout — feishu plugin install takes 60s+
+    // Race: wait for either source to find the QR URL, with 120s overall timeout
     let found_url: Option<String> = tokio::time::timeout(
         std::time::Duration::from_secs(120),
-        read_log_future,
+        async {
+            // Wait for CLI process first (it usually finishes faster)
+            let cli_result = cli_handle.await;
+            match cli_result {
+                Ok((Some(url), _)) => return Some(url),
+                Ok((None, Some(err))) => {
+                    // CLI failed with error — emit for diagnostics
+                    let _ = app.emit("binding-progress", serde_json::json!({
+                        "platform": platform,
+                        "stage": "cli_output",
+                        "message": err,
+                    }));
+                }
+                _ => {}
+            }
+            // CLI didn't find URL — wait for log file (30s extra)
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                log_handle,
+            ).await {
+                Ok(Ok(Some(url))) => Some(url),
+                _ => None,
+            }
+        },
     ).await
     .unwrap_or(None);
 
@@ -395,7 +453,7 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         }
         None => {
             let cmd_hint = format!("npx -y {} ", pdef.install_cmd);
-            Err(format!("未能提取二维码链接（超时）。请在终端执行：{}", cmd_hint))
+            Err(format!("未能提取二维码链接。请在终端执行：{}", cmd_hint))
         }
     }
 }
