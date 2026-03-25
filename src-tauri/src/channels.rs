@@ -272,7 +272,11 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         if js_path.exists() { Some(js_path) } else { None }
     });
 
-    // Build PATH that includes channel-cli/node_modules/.bin/ (for `openclaw` command)
+    // Build PATH that includes:
+    // 1. Sandboxed node directory
+    // 2. channel-cli's .bin directory
+    // 3. Directory containing the `openclaw` binary (CLI tools need it for gateway discovery)
+    // 4. System PATH
     let sandbox_path = {
         let mut paths = vec![];
         // Add sandboxed node directory
@@ -281,9 +285,13 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
                 paths.push(node_dir.to_path_buf());
             }
         }
-        // Add channel-cli's .bin directory (contains openclaw, weixin-installer, etc.)
+        // Add channel-cli's .bin directory
         if let Some(ref dir) = cli_dir {
             paths.push(dir.join("node_modules").join(".bin"));
+        }
+        // Find and add the directory containing the `openclaw` binary
+        if let Some(oc_dir) = find_openclaw_bin_dir() {
+            paths.push(oc_dir);
         }
         // Append system PATH
         if let Some(current) = std::env::var_os("PATH") {
@@ -639,6 +647,54 @@ fn get_openclaw_log_dir() -> std::path::PathBuf {
         let temp = std::env::var("TEMP").unwrap_or_else(|_| r"C:\tmp".to_string());
         std::path::PathBuf::from(temp).join("openclaw")
     }
+}
+
+/// Find the directory containing the `openclaw` binary.
+/// CLI tools (weixin-installer, openclaw-lark) need this to discover the gateway.
+/// Returns the parent directory of the binary (to be added to PATH).
+fn find_openclaw_bin_dir() -> Option<std::path::PathBuf> {
+    #[cfg(unix)]
+    {
+        // First check: sandboxed node's bin dir (might have openclaw installed there)
+        if let Ok(node_bin) = crate::environment::get_node_binary() {
+            if let Some(bin_dir) = node_bin.parent() {
+                if bin_dir.join("openclaw").exists() {
+                    return Some(bin_dir.to_path_buf());
+                }
+            }
+        }
+        // Second: scan all nvm versions
+        if let Ok(home) = std::env::var("HOME") {
+            let nvm_dir = std::path::PathBuf::from(&home).join(".nvm/versions/node");
+            if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
+                for entry in entries.flatten() {
+                    let oc = entry.path().join("bin/openclaw");
+                    if oc.exists() {
+                        return Some(entry.path().join("bin"));
+                    }
+                }
+            }
+        }
+    }
+    #[cfg(windows)]
+    {
+        // Check sandboxed node's directory
+        if let Ok(node_bin) = crate::environment::get_node_binary() {
+            if let Some(bin_dir) = node_bin.parent() {
+                if bin_dir.join("openclaw.cmd").exists() || bin_dir.join("openclaw").exists() {
+                    return Some(bin_dir.to_path_buf());
+                }
+            }
+        }
+        // Check common global npm paths on Windows
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let npm_dir = std::path::PathBuf::from(&appdata).join("npm");
+            if npm_dir.join("openclaw.cmd").exists() {
+                return Some(npm_dir);
+            }
+        }
+    }
+    None
 }
 
 fn cleanup_binding(platform: &str) {
