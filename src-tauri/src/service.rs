@@ -3,6 +3,7 @@
 // This file is part of OpenClaw Launcher. See LICENSE for details.
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::io::{BufRead, BufReader};
 use std::net::TcpListener;
 use tauri::Emitter;
@@ -12,6 +13,9 @@ use std::os::windows::process::CommandExt;
 
 use crate::environment;
 use crate::paths;
+
+/// Global gateway port — readable by channels module for CLI tools
+pub static GATEWAY_PORT: AtomicU16 = AtomicU16::new(18789);
 
 /// Pre-build Control UI assets if missing.
 ///
@@ -219,7 +223,9 @@ pub async fn start_service(
     app: tauri::AppHandle,
     state: tauri::State<'_, ServiceState>,
 ) -> Result<String, String> {
-    // Pre-build Control UI if missing (fixes Windows space-in-path issue)
+    // ══════════════════════════════════════════════════════════════════
+    // Stage ① Environment Pre-check
+    // ══════════════════════════════════════════════════════════════════
     ensure_control_ui_built(&app);
 
     // Check if already running (managed by this Launcher instance)
@@ -232,17 +238,25 @@ pub async fn start_service(
         }
     }
 
-    // Clean up any pre-existing gateway processes and stale locks
-    cleanup_stale_gateway(&app);
-
-    // Get paths
     let node_bin = environment::get_node_binary()?;
     let openclaw_dir = paths::get_openclaw_dir()?;
 
     if !openclaw_dir.join("package.json").exists() {
         return Err("OpenClaw 未安装，请先完成初始化".to_string());
     }
-    // Find an available port starting from 18789 (OpenClaw gateway default)
+
+    // ══════════════════════════════════════════════════════════════════
+    // Stage ② Process Cleanup (lock files + port-level kill)
+    // ══════════════════════════════════════════════════════════════════
+    cleanup_stale_gateway(&app);
+
+    // ══════════════════════════════════════════════════════════════════
+    // Stage ③ Config Auto-Fix
+    // ══════════════════════════════════════════════════════════════════
+    auto_fix_config(&app, &node_bin, &openclaw_dir);
+    // ══════════════════════════════════════════════════════════════════
+    // Stage ④ Port Allocation
+    // ══════════════════════════════════════════════════════════════════
     let mut chosen_port: u16 = 18789;
     let mut found = false;
     for port in 18789..=18899 {
@@ -255,6 +269,9 @@ pub async fn start_service(
     if !found {
         return Err("端口 18789-18899 全部被占用。请关闭其他 OpenClaw 实例后重试。".to_string());
     }
+
+    // Store globally so channels module can read it
+    GATEWAY_PORT.store(chosen_port, Ordering::SeqCst);
 
     if chosen_port != 18789 {
         let _ = app.emit("service-log", serde_json::json!({
@@ -271,11 +288,12 @@ pub async fn start_service(
         "message": format!("🚀 正在启动 OpenClaw 服务 (端口 {})...", chosen_port)
     }));
 
-    // Build the start command — use OpenClaw's native entry point directly
+    // ══════════════════════════════════════════════════════════════════
+    // Stage ⑤ Spawn Gateway + Health Check
+    // ══════════════════════════════════════════════════════════════════
     let node_dir = node_bin.parent().unwrap().to_path_buf();
     let run_script = openclaw_dir.join("scripts").join("run-node.mjs");
 
-    // Auth token for web UI — injected via env var (also set in openclaw.json)
     let token = "openclaw-launcher-local";
 
     let mut cmd = Command::new(&node_bin);
@@ -430,53 +448,47 @@ fn is_service_ready_signal(line: &str) -> bool {
 /// that occurs when a gateway from a previous session (manual start, watchdog,
 /// or crashed Launcher) is still running.
 fn cleanup_stale_gateway(app: &tauri::AppHandle) {
-    // Find the lock directory (platform-specific)
+    // ── Phase A: Lock-file based cleanup ──
     let lock_dir = get_lock_dir();
-    if !lock_dir.exists() {
-        return;
-    }
-
-    // Read all .lock files
-    let entries = match std::fs::read_dir(&lock_dir) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.extension().map_or(false, |ext| ext == "lock") {
-            continue;
-        }
-
-        // Parse the lock file JSON to get the PID
-        let content = match std::fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(_) => {
-                let _ = std::fs::remove_file(&path);
-                continue;
-            }
+    if lock_dir.exists() {
+        let entries = match std::fs::read_dir(&lock_dir) {
+            Ok(e) => e,
+            Err(_) => return,
         };
 
-        let pid: Option<u32> = serde_json::from_str::<serde_json::Value>(&content)
-            .ok()
-            .and_then(|v| v.get("pid")?.as_u64())
-            .map(|p| p as u32);
-
-        if let Some(pid) = pid {
-            if is_process_alive(pid) {
-                let _ = app.emit("service-log", serde_json::json!({
-                    "level": "info",
-                    "message": format!("检测到已有 Gateway 进程 (pid {}), 正在关闭...", pid)
-                }));
-                kill_process(pid);
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.extension().map_or(false, |ext| ext == "lock") {
+                continue;
             }
-        }
 
-        // Remove the lock file regardless
-        let _ = std::fs::remove_file(&path);
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => {
+                    let _ = std::fs::remove_file(&path);
+                    continue;
+                }
+            };
+
+            let pid: Option<u32> = serde_json::from_str::<serde_json::Value>(&content)
+                .ok()
+                .and_then(|v| v.get("pid")?.as_u64())
+                .map(|p| p as u32);
+
+            if let Some(pid) = pid {
+                if is_process_alive(pid) {
+                    let _ = app.emit("service-log", serde_json::json!({
+                        "level": "info",
+                        "message": format!("检测到已有 Gateway 进程 (pid {}), 正在关闭...", pid)
+                    }));
+                    kill_process(pid);
+                }
+            }
+            let _ = std::fs::remove_file(&path);
+        }
     }
 
-    // Kill gateway-watchdog if running (Unix only, it auto-restarts the gateway)
+    // Kill gateway-watchdog if running (Unix only)
     #[cfg(unix)]
     {
         let _ = std::process::Command::new("pkill")
@@ -484,8 +496,100 @@ fn cleanup_stale_gateway(app: &tauri::AppHandle) {
             .output();
     }
 
-    // Brief pause for ports to be fully released
     std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // ── Phase B: Port-level kill (fallback) ──
+    // If port 18789 is STILL occupied after lock cleanup, find and kill by port
+    if !is_port_available(18789) {
+        let _ = app.emit("service-log", serde_json::json!({
+            "level": "warn",
+            "message": "端口 18789 仍被占用，正在按端口关闭进程..."
+        }));
+        kill_process_on_port(18789);
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+}
+
+/// Auto-fix invalid config keys before gateway startup.
+/// Runs `openclaw doctor --fix` silently — prevents red "Unrecognized key" errors.
+fn auto_fix_config(
+    app: &tauri::AppHandle,
+    node_bin: &std::path::Path,
+    openclaw_dir: &std::path::Path,
+) {
+    let run_script = openclaw_dir.join("scripts").join("run-node.mjs");
+    if !run_script.exists() {
+        return;
+    }
+
+    let mut cmd = Command::new(node_bin);
+    cmd.arg(&run_script)
+        .arg("doctor")
+        .arg("--fix")
+        .current_dir(openclaw_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000);
+
+    match cmd.output() {
+        Ok(output) => {
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let snippet: String = stderr.chars().take(200).collect();
+                if !snippet.is_empty() {
+                    let _ = app.emit("service-log", serde_json::json!({
+                        "level": "warn",
+                        "message": format!("配置自动修复: {}", snippet)
+                    }));
+                }
+            }
+        }
+        Err(_) => {
+            // Silently ignore — doctor might not exist in older versions
+        }
+    }
+}
+
+/// Kill whatever process is listening on the given port.
+fn kill_process_on_port(port: u16) {
+    #[cfg(unix)]
+    {
+        // Use lsof to find PID, then kill
+        if let Ok(output) = std::process::Command::new("lsof")
+            .args(["-ti", &format!(":{}", port)])
+            .output()
+        {
+            let pids = String::from_utf8_lossy(&output.stdout);
+            for pid_str in pids.lines() {
+                if let Ok(pid) = pid_str.trim().parse::<u32>() {
+                    kill_process(pid);
+                }
+            }
+        }
+    }
+    #[cfg(windows)]
+    {
+        // Use netstat to find PID, then taskkill
+        if let Ok(output) = std::process::Command::new("netstat")
+            .args(["-ano"])
+            .output()
+        {
+            let text = String::from_utf8_lossy(&output.stdout);
+            let port_str = format!(":{}", port);
+            for line in text.lines() {
+                if line.contains(&port_str) && line.contains("LISTENING") {
+                    // Last column is PID
+                    if let Some(pid_str) = line.split_whitespace().last() {
+                        if let Ok(pid) = pid_str.trim().parse::<u32>() {
+                            kill_process(pid);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Get the lock directory path (platform-specific)

@@ -300,6 +300,9 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         std::env::join_paths(paths).unwrap_or_default()
     };
 
+    // Read the actual gateway port (may not be 18789 if port was in use)
+    let gateway_port = crate::service::GATEWAY_PORT.load(std::sync::atomic::Ordering::SeqCst);
+
     // Spawn CLI process (triggers QR generation in the gateway)
     let child = if let Some(js_path) = cli_js_entry {
         let _ = app.emit("binding-progress", serde_json::json!({
@@ -312,6 +315,7 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         cmd.arg(js_path.to_string_lossy().to_string())
             .arg("install")
             .env("PATH", &sandbox_path)
+            .env("OPENCLAW_PORT", gateway_port.to_string())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         #[cfg(target_os = "windows")]
@@ -335,6 +339,7 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         let mut cmd = tokio::process::Command::new(npx_cmd);
         cmd.args(&args)
             .env("PATH", &sandbox_path)
+            .env("OPENCLAW_PORT", gateway_port.to_string())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         #[cfg(target_os = "windows")]
