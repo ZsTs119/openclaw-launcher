@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased] — Phase 9.6: 插件预加载
+
+### 文档变更
+- `phase9_channels.md` 新增 9.6 插件预加载方案（三层预加载 + 边界处理）
+- `TODO.md` 新增 Phase 9.6 任务项
+
+### 待实现
+- `ensure_plugins_allowed()`: gateway 启动前自动注入 `plugins.allow`
+- channels 绑定 fallback 检查 + 友好提示
+
+---
+
 ## [v0.1.0] - 2026-03-07
 
 ### 🚀 首次发布 — Phase 1 MVP

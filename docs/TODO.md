@@ -229,6 +229,13 @@
 - [ ] 飞书配置引导（开放平台 → App ID/Secret → 事件订阅）
 - [ ] 平台连接状态展示 + 编辑/删除
 
+#### 9.6 插件预加载（plugins.allow 自动注入）
+- [ ] `ensure_plugins_allowed()`: gateway 启动前注入 `plugins.allow` 到 `openclaw.json`
+- [ ] `service.rs` Stage③ 调用 `ensure_plugins_allowed()`
+- [ ] `channels.rs` fallback 检查 + 友好提示
+- [ ] 微信绑定 QR 码生成 → 扫码绑定
+- [ ] 飞书绑定 QR 码生成 → 扫码绑定
+
 ### 🌐 Phase 10: i18n + Ollama + 数据统计 → `v0.8.0`
 - [ ] i18n 国际化: `react-i18next`（zh-CN + en）
 - [ ] 设置页语言切换

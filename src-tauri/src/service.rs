@@ -254,6 +254,9 @@ pub async fn start_service(
     // Stage ③ Config Auto-Fix
     // ══════════════════════════════════════════════════════════════════
     auto_fix_config(&app, &node_bin, &openclaw_dir);
+    // Pre-inject plugins.allow for channel binding (feishu/wechat)
+    // Must happen BEFORE gateway spawns so it reads the correct config.
+    crate::channels::ensure_plugins_allowed();
     // ══════════════════════════════════════════════════════════════════
     // Stage ④ Port Allocation
     // ══════════════════════════════════════════════════════════════════

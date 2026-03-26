@@ -62,7 +62,13 @@ export function BindingModal({ platformId, platformName, onClose }: BindingModal
             startPolling();
         } catch (err) {
             if (closedRef.current) return;
-            setErrorMsg(String(err));
+            const errStr = String(err);
+            // Friendly message for plugins.allow errors
+            if (errStr.includes("plugins.allow") || errStr.includes("plugins")) {
+                setErrorMsg("插件权限未生效，请在仪表盘重启 OpenClaw 服务后重试");
+            } else {
+                setErrorMsg(errStr);
+            }
             setStage("error");
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,6 +124,9 @@ export function BindingModal({ platformId, platformName, onClose }: BindingModal
                         break;
                     case "qr_ready":
                         setStage("qr_ready");
+                        break;
+                    case "plugins_injected":
+                        setProgressMsg("已自动配置插件权限");
                         break;
                     case "process_ended":
                         // Process ended, let polling detect success/expired

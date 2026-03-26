@@ -43,6 +43,7 @@ struct PlatformDef {
     name: &'static str,
     install_cmd: &'static str,
     config_key: &'static str,
+    plugin_id: &'static str,  // OpenClaw gateway plugin ID for plugins.allow
     bind_mode: &'static str,
     available: bool,
 }
@@ -53,6 +54,7 @@ const PLATFORMS: &[PlatformDef] = &[
         name: "微信",
         install_cmd: "@tencent-weixin/openclaw-weixin-cli@latest install",
         config_key: "wechat",
+        plugin_id: "openclaw-weixin",
         bind_mode: "qrcode",
         available: true,
     },
@@ -61,6 +63,7 @@ const PLATFORMS: &[PlatformDef] = &[
         name: "飞书",
         install_cmd: "@larksuite/openclaw-lark install",
         config_key: "feishu",
+        plugin_id: "openclaw-lark",
         bind_mode: "qrcode",
         available: true,
     },
@@ -69,6 +72,7 @@ const PLATFORMS: &[PlatformDef] = &[
         name: "Telegram",
         install_cmd: "",
         config_key: "telegram",
+        plugin_id: "",
         bind_mode: "token",
         available: false,
     },
@@ -77,6 +81,7 @@ const PLATFORMS: &[PlatformDef] = &[
         name: "Discord",
         install_cmd: "",
         config_key: "discord",
+        plugin_id: "",
         bind_mode: "token",
         available: false,
     },
@@ -85,6 +90,7 @@ const PLATFORMS: &[PlatformDef] = &[
         name: "QQ",
         install_cmd: "",
         config_key: "qq",
+        plugin_id: "",
         bind_mode: "manual",
         available: false,
     },
@@ -222,6 +228,18 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         if pids.contains_key(&platform) {
             return Err("绑定进程已在运行".to_string());
         }
+    }
+
+    // Fallback: ensure plugins.allow is set even if gateway was started externally.
+    // If config was just modified, the running gateway won't pick it up until restart,
+    // but we still inject it so the CLI tool can register with the gateway.
+    let plugins_just_injected = ensure_plugins_allowed();
+    if plugins_just_injected {
+        let _ = app.emit("binding-progress", serde_json::json!({
+            "platform": platform,
+            "stage": "plugins_injected",
+            "message": "已自动配置插件权限",
+        }));
     }
 
     let _ = app.emit("binding-progress", serde_json::json!({
@@ -607,6 +625,83 @@ pub fn unbind_channel(platform: String) -> Result<(), String> {
 
     write_config(&config)?;
     Ok(())
+}
+
+// ──────────────────────────────── Plugin allow-list ───────────────────
+
+/// Pre-inject `plugins.allow` into openclaw.json so the gateway accepts
+/// non-bundled channel plugins (openclaw-lark, openclaw-weixin).
+///
+/// Called from:
+/// 1. `service::start_service()` Stage ③ — before gateway spawn (ideal, zero-restart)
+/// 2. `start_channel_binding()` — fallback if gateway was started externally
+///
+/// Returns true if config was modified (caller may need to restart gateway).
+pub fn ensure_plugins_allowed() -> bool {
+    let config_path = match get_user_openclaw_dir() {
+        Ok(dir) => dir.join("openclaw.json"),
+        Err(_) => return false,
+    };
+
+    let mut config: serde_json::Value = if config_path.exists() {
+        match std::fs::read_to_string(&config_path) {
+            Ok(content) => serde_json::from_str(&content).unwrap_or(serde_json::json!({})),
+            Err(_) => return false,
+        }
+    } else {
+        serde_json::json!({})
+    };
+
+    // Collect all plugin IDs from available platforms
+    let required_plugins: Vec<&str> = PLATFORMS
+        .iter()
+        .filter(|p| p.available && !p.plugin_id.is_empty())
+        .map(|p| p.plugin_id)
+        .collect();
+
+    if required_plugins.is_empty() {
+        return false;
+    }
+
+    // Check if plugins.allow is already "*" (wildcard — allows everything)
+    if let Some(allow) = config.get("plugins").and_then(|p| p.get("allow")) {
+        if allow.as_str() == Some("*") {
+            return false;
+        }
+    }
+
+    // Ensure plugins object exists
+    if config.get("plugins").is_none() {
+        config["plugins"] = serde_json::json!({});
+    }
+
+    // Ensure plugins.allow is an array
+    let allow_arr = if config["plugins"].get("allow").and_then(|a| a.as_array()).is_some() {
+        config["plugins"]["allow"].as_array_mut().unwrap()
+    } else {
+        config["plugins"]["allow"] = serde_json::json!([]);
+        config["plugins"]["allow"].as_array_mut().unwrap()
+    };
+
+    // MERGE: add missing plugin IDs without removing existing ones
+    let mut changed = false;
+    for plugin_id in &required_plugins {
+        let already_present = allow_arr
+            .iter()
+            .any(|v| v.as_str() == Some(plugin_id));
+        if !already_present {
+            allow_arr.push(serde_json::json!(plugin_id));
+            changed = true;
+        }
+    }
+
+    if changed {
+        if let Ok(output) = serde_json::to_string_pretty(&config) {
+            let _ = std::fs::write(&config_path, output);
+        }
+    }
+
+    changed
 }
 
 // ──────────────────────────────── Internal helpers ────────────────────

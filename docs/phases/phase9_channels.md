@@ -112,6 +112,36 @@ npx 首次同步阻塞下载 CLI 工具超时，QR 码无法生成。
 | `ChannelsTab.tsx` | 进入 Tab 时调用预下载 |
 | `channels.css` | 引导步骤样式 |
 
+## 9.6 插件预加载（plugins.allow 自动注入）
+
+### 问题
+OpenClaw 3.22+ 要求非 bundled 插件（`openclaw-lark`、`openclaw-weixin`）
+在 `openclaw.json` 的 `plugins.allow` 中显式授权，否则 gateway 拒绝加载。
+
+### 方案：三层预加载
+
+| 层 | 时机 | 动作 |
+|---|---|---|
+| ① Config 注入 | `start_service` Stage③ | 写 `plugins.allow` 到 `openclaw.json`（gateway 启动前） |
+| ② CLI 预下载 | 进入渠道 Tab | `ensure_channel_cli`（已有） |
+| ③ 直接绑定 | 点击"开始绑定" | spawn CLI → QR 秒出 |
+
+### 涉及文件
+
+| 文件 | 改动 |
+|---|---|
+| `service.rs` | Stage③ 追加 `ensure_plugins_allowed()` 调用 |
+| `channels.rs` | 新增 `ensure_plugins_allowed()` + fallback 检查 |
+| `BindingModal.tsx` | plugins 相关错误友好提示 |
+
+### 边界
+
+| 场景 | 处理 |
+|---|---|
+| config 已有 plugins.allow | MERGE 追加，不覆盖 |
+| 手动启动 gateway（未走 Launcher） | fallback 在绑定时也调用 + 提示重启 |
+| config 不存在 | 创建并写入 |
+
 ## 验收标准
 
 ```
@@ -119,6 +149,7 @@ npx 首次同步阻塞下载 CLI 工具超时，QR 码无法生成。
 [x] 解绑：3s 确认 → config 清除 → UI 回到未绑定
 [x] 敬请期待卡片正确
 [x] Node.js 一键升级按钮
+[ ] 插件预加载：gateway 启动时自动注入 plugins.allow
 [ ] 微信：引导弹窗 → CLI预下载 → QR生成 → 扫码绑定
 [ ] 飞书：引导弹窗 → CLI预下载 → QR生成 → 扫码绑定
 [ ] 边界：网关提示 / Node 提示 / 降级提示 / QR 过期重新生成
