@@ -632,16 +632,22 @@ pub fn unbind_channel(platform: String) -> Result<(), String> {
 /// Pre-inject `plugins.allow` into openclaw.json so the gateway accepts
 /// non-bundled channel plugins (openclaw-lark, openclaw-weixin).
 ///
+/// IMPORTANT: Only adds plugins that are actually installed in
+/// `~/.openclaw/extensions/<plugin_id>/`. The gateway validates the config
+/// and rejects plugin IDs that don't have installed extensions.
+///
 /// Called from:
 /// 1. `service::start_service()` Stage ③ — before gateway spawn (ideal, zero-restart)
 /// 2. `start_channel_binding()` — fallback if gateway was started externally
 ///
 /// Returns true if config was modified (caller may need to restart gateway).
 pub fn ensure_plugins_allowed() -> bool {
-    let config_path = match get_user_openclaw_dir() {
-        Ok(dir) => dir.join("openclaw.json"),
+    let openclaw_dir = match get_user_openclaw_dir() {
+        Ok(dir) => dir,
         Err(_) => return false,
     };
+    let config_path = openclaw_dir.join("openclaw.json");
+    let extensions_dir = openclaw_dir.join("extensions");
 
     let mut config: serde_json::Value = if config_path.exists() {
         match std::fs::read_to_string(&config_path) {
@@ -652,10 +658,11 @@ pub fn ensure_plugins_allowed() -> bool {
         serde_json::json!({})
     };
 
-    // Collect all plugin IDs from available platforms
+    // Collect plugin IDs that are actually installed in extensions/
     let required_plugins: Vec<&str> = PLATFORMS
         .iter()
         .filter(|p| p.available && !p.plugin_id.is_empty())
+        .filter(|p| extensions_dir.join(p.plugin_id).exists())
         .map(|p| p.plugin_id)
         .collect();
 
@@ -683,8 +690,24 @@ pub fn ensure_plugins_allowed() -> bool {
         config["plugins"]["allow"].as_array_mut().unwrap()
     };
 
-    // MERGE: add missing plugin IDs without removing existing ones
-    let mut changed = false;
+    // Also clean up stale entries: remove any plugin IDs whose extensions no longer exist
+    let original_len = allow_arr.len();
+    allow_arr.retain(|v| {
+        if let Some(id) = v.as_str() {
+            // Keep entries that either exist in extensions/ or are not our managed plugins
+            let is_our_plugin = PLATFORMS.iter().any(|p| p.plugin_id == id);
+            if is_our_plugin {
+                extensions_dir.join(id).exists()
+            } else {
+                true // Keep third-party plugin entries
+            }
+        } else {
+            true // Keep non-string entries
+        }
+    });
+
+    // MERGE: add installed plugin IDs without removing existing ones
+    let mut changed = allow_arr.len() != original_len;
     for plugin_id in &required_plugins {
         let already_present = allow_arr
             .iter()
