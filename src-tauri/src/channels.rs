@@ -666,15 +666,21 @@ pub fn ensure_plugins_allowed() -> bool {
         .map(|p| p.plugin_id)
         .collect();
 
-    if required_plugins.is_empty() {
-        return false;
-    }
-
     // Check if plugins.allow is already "*" (wildcard — allows everything)
     if let Some(allow) = config.get("plugins").and_then(|p| p.get("allow")) {
         if allow.as_str() == Some("*") {
             return false;
         }
+    }
+
+    // If there's no plugins.allow array at all and nothing to add, skip
+    let has_allow_arr = config.get("plugins")
+        .and_then(|p| p.get("allow"))
+        .and_then(|a| a.as_array())
+        .is_some();
+
+    if !has_allow_arr && required_plugins.is_empty() {
+        return false;
     }
 
     // Ensure plugins object exists
@@ -690,32 +696,49 @@ pub fn ensure_plugins_allowed() -> bool {
         config["plugins"]["allow"].as_array_mut().unwrap()
     };
 
-    // Also clean up stale entries: remove any plugin IDs whose extensions no longer exist
+    // ALWAYS clean up stale entries first: remove plugin IDs whose extensions don't exist
     let original_len = allow_arr.len();
     allow_arr.retain(|v| {
         if let Some(id) = v.as_str() {
-            // Keep entries that either exist in extensions/ or are not our managed plugins
             let is_our_plugin = PLATFORMS.iter().any(|p| p.plugin_id == id);
             if is_our_plugin {
                 extensions_dir.join(id).exists()
             } else {
-                true // Keep third-party plugin entries
+                true // Keep third-party entries
             }
         } else {
-            true // Keep non-string entries
+            true
         }
     });
 
-    // MERGE: add installed plugin IDs without removing existing ones
+    // MERGE: add installed plugin IDs
     let mut changed = allow_arr.len() != original_len;
     for plugin_id in &required_plugins {
-        let already_present = allow_arr
-            .iter()
-            .any(|v| v.as_str() == Some(plugin_id));
+        let already_present = allow_arr.iter().any(|v| v.as_str() == Some(plugin_id));
         if !already_present {
             allow_arr.push(serde_json::json!(plugin_id));
             changed = true;
         }
+    }
+
+    // If allow_arr is now empty, remove the plugins.allow key entirely
+    // to avoid gateway treating it as "deny all"
+    if allow_arr.is_empty() {
+        if let Some(plugins) = config.get_mut("plugins") {
+            if let Some(obj) = plugins.as_object_mut() {
+                obj.remove("allow");
+                // If plugins object is now empty, remove it too
+                if obj.is_empty() {
+                    changed = true;
+                }
+            }
+        }
+        if config.get("plugins").and_then(|p| p.as_object()).map_or(false, |o| o.is_empty()) {
+            if let Some(obj) = config.as_object_mut() {
+                obj.remove("plugins");
+            }
+        }
+        changed = original_len > 0; // changed if we removed entries
     }
 
     if changed {
