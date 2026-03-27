@@ -230,14 +230,6 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         }
     }
 
-    // Inject the specific plugin for this platform into plugins.allow
-    // so the gateway accepts it during binding.
-    inject_plugin_for_binding(&pdef.plugin_id);
-    let _ = app.emit("binding-progress", serde_json::json!({
-        "platform": platform,
-        "stage": "plugins_injected",
-        "message": "已自动配置插件权限",
-    }));
 
     let _ = app.emit("binding-progress", serde_json::json!({
         "platform": platform,
@@ -627,157 +619,54 @@ pub fn unbind_channel(platform: String) -> Result<(), String> {
 
 // ──────────────────────────────── Plugin allow-list ───────────────────
 
-/// Inject a SINGLE plugin ID into plugins.allow for binding.
-/// Called from start_channel_binding before spawning the CLI.
+/// Set `plugins.allow: "*"` in openclaw.json before gateway startup.
 ///
-/// Unlike ensure_plugins_allowed() (cleanup-only at startup),
-/// this explicitly ADDS the plugin so the gateway accepts it.
-fn inject_plugin_for_binding(plugin_id: &str) {
-    if plugin_id.is_empty() {
-        return;
-    }
+/// This allows the gateway to auto-load ALL extensions in ~/.openclaw/extensions/
+/// without needing to list each plugin ID individually.
+///
+/// Called from service::start_service() Stage ③.
+pub fn ensure_plugins_allowed() -> bool {
     let openclaw_dir = match get_user_openclaw_dir() {
         Ok(dir) => dir,
-        Err(_) => return,
+        Err(_) => return false,
     };
     let config_path = openclaw_dir.join("openclaw.json");
 
     if !config_path.exists() {
-        return;
+        return false;
     }
 
     let raw = match std::fs::read_to_string(&config_path) {
         Ok(c) => c,
-        Err(_) => return,
+        Err(_) => return false,
     };
     let mut config: serde_json::Value = match serde_json::from_str(&raw) {
         Ok(v) => v,
-        Err(_) => return,
+        Err(_) => return false,
     };
 
-    // If wildcard, no need to add
+    // Already set to wildcard — nothing to do
     if config.get("plugins")
         .and_then(|p| p.get("allow"))
         .and_then(|a| a.as_str()) == Some("*")
     {
-        return;
+        return false;
     }
 
-    // Ensure plugins.allow exists as array
+    // Set plugins.allow = "*"
     if config.get("plugins").is_none() {
         config["plugins"] = serde_json::json!({});
     }
-    if !config["plugins"].get("allow").and_then(|a| a.as_array()).is_some() {
-        config["plugins"]["allow"] = serde_json::json!([]);
-    }
+    config["plugins"]["allow"] = serde_json::json!("*");
 
-    let allow_arr = config["plugins"]["allow"].as_array_mut().unwrap();
-
-    // Add if not already present
-    if !allow_arr.iter().any(|v| v.as_str() == Some(plugin_id)) {
-        allow_arr.push(serde_json::json!(plugin_id));
-        eprintln!("[plugins-allow] injected for binding: {}", plugin_id);
-
-        if let Ok(output) = serde_json::to_string_pretty(&config) {
-            let _ = std::fs::write(&config_path, output);
-        }
-    }
-}
-
-/// Clean `plugins.allow` in openclaw.json at gateway startup.
-///
-/// STRATEGY: At startup, REMOVE our managed plugin IDs from plugins.allow.
-/// We do NOT add plugins here — adding broken/unloadable plugins causes
-/// gateway config validation errors that block startup entirely.
-///
-/// The gateway will auto-discover installed extensions and warn about
-/// auto-loading, which is a harmless warning (not a blocking error).
-///
-/// Plugin allow-listing should only happen during explicit binding flow
-/// after verifying the plugin actually loads correctly.
-pub fn ensure_plugins_allowed() -> bool {
-    let openclaw_dir = match get_user_openclaw_dir() {
-        Ok(dir) => dir,
-        Err(e) => {
-            eprintln!("[plugins-allow] get_user_openclaw_dir failed: {}", e);
-            return false;
-        }
-    };
-    let config_path = openclaw_dir.join("openclaw.json");
-
-    if !config_path.exists() {
-        return false;
-    }
-
-    let raw = match std::fs::read_to_string(&config_path) {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
-
-    let mut config: serde_json::Value = match serde_json::from_str(&raw) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-
-    // Collect our managed plugin IDs
-    let our_plugin_ids: Vec<&str> = PLATFORMS
-        .iter()
-        .filter(|p| !p.plugin_id.is_empty())
-        .map(|p| p.plugin_id)
-        .collect();
-
-    // Check if plugins.allow exists as an array
-    let has_allow = config.get("plugins")
-        .and_then(|p| p.get("allow"))
-        .and_then(|a| a.as_array())
-        .is_some();
-
-    if !has_allow {
-        return false;
-    }
-
-    let allow_arr = config["plugins"]["allow"].as_array_mut().unwrap();
-    let original_len = allow_arr.len();
-
-    // Remove ALL our managed plugin IDs from plugins.allow
-    allow_arr.retain(|v| {
-        if let Some(id) = v.as_str() {
-            let is_ours = our_plugin_ids.contains(&id);
-            if is_ours {
-                eprintln!("[plugins-allow] removing managed plugin: {}", id);
-            }
-            !is_ours
-        } else {
-            true
-        }
-    });
-
-    let changed = allow_arr.len() != original_len;
-
-    // If plugins.allow is now empty, remove the key entirely
-    if allow_arr.is_empty() {
-        if let Some(plugins) = config.get_mut("plugins") {
-            if let Some(obj) = plugins.as_object_mut() {
-                obj.remove("allow");
-            }
-        }
-        if config.get("plugins").and_then(|p| p.as_object()).map_or(false, |o| o.is_empty()) {
-            config.as_object_mut().map(|o| o.remove("plugins"));
+    if let Ok(output) = serde_json::to_string_pretty(&config) {
+        match std::fs::write(&config_path, &output) {
+            Ok(_) => eprintln!("[plugins-allow] set plugins.allow = \"*\""),
+            Err(e) => eprintln!("[plugins-allow] write failed: {}", e),
         }
     }
 
-    if changed {
-        if let Ok(output) = serde_json::to_string_pretty(&config) {
-            match std::fs::write(&config_path, &output) {
-                Ok(_) => eprintln!("[plugins-allow] cleaned config successfully"),
-                Err(e) => eprintln!("[plugins-allow] write failed: {}", e),
-            }
-        }
-    } else {
-        eprintln!("[plugins-allow] no managed plugins in allow list, nothing to clean");
-    }
-
-    changed
+    true
 }
 
 // ──────────────────────────────── Internal helpers ────────────────────
