@@ -15,7 +15,8 @@ use crate::environment;
 use crate::paths;
 
 /// Global gateway port — readable by channels module for CLI tools
-pub static GATEWAY_PORT: AtomicU16 = AtomicU16::new(18789);
+/// Launcher uses 18800+ to avoid conflicts with standalone OpenClaw (which defaults to 18789).
+pub static GATEWAY_PORT: AtomicU16 = AtomicU16::new(18800);
 
 /// Pre-build Control UI assets if missing.
 ///
@@ -176,7 +177,7 @@ fn is_port_available(port: u16) -> bool {
 /// Check if OpenClaw gateway port is available (exposed to frontend)
 #[tauri::command]
 pub fn check_port_available() -> Result<bool, String> {
-    Ok(is_port_available(18789))
+    Ok(is_port_available(18800))
 }
 
 /// Global state to hold the running OpenClaw child process
@@ -259,10 +260,12 @@ pub async fn start_service(
     crate::channels::ensure_plugins_allowed();
     // ══════════════════════════════════════════════════════════════════
     // Stage ④ Port Allocation
+    // Start from 18800 to avoid conflicts with standalone OpenClaw (18789)
+    // and WSL2 port forwarding proxies on lower ports.
     // ══════════════════════════════════════════════════════════════════
-    let mut chosen_port: u16 = 18789;
+    let mut chosen_port: u16 = 18800;
     let mut found = false;
-    for port in 18789..=18899 {
+    for port in 18800..=18899 {
         if is_port_available(port) {
             chosen_port = port;
             found = true;
@@ -270,16 +273,16 @@ pub async fn start_service(
         }
     }
     if !found {
-        return Err("端口 18789-18899 全部被占用。请关闭其他 OpenClaw 实例后重试。".to_string());
+        return Err("端口 18800-18899 全部被占用。请关闭其他 OpenClaw 实例后重试。".to_string());
     }
 
     // Store globally so channels module can read it
     GATEWAY_PORT.store(chosen_port, Ordering::SeqCst);
 
-    if chosen_port != 18789 {
+    if chosen_port != 18800 {
         let _ = app.emit("service-log", serde_json::json!({
             "level": "warn",
-            "message": format!("⚠️ 默认端口 18789 已占用，自动切换到端口 {}", chosen_port)
+            "message": format!("默认端口 18800 已占用，自动切换到端口 {}", chosen_port)
         }));
     }
 
@@ -501,16 +504,11 @@ fn cleanup_stale_gateway(app: &tauri::AppHandle) {
 
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    // ── Phase B: Port-level kill (fallback) ──
-    // If port 18789 is STILL occupied after lock cleanup, find and kill by port
-    if !is_port_available(18789) {
-        let _ = app.emit("service-log", serde_json::json!({
-            "level": "warn",
-            "message": "端口 18789 仍被占用，正在按端口关闭进程..."
-        }));
-        kill_process_on_port(18789);
-        std::thread::sleep(std::time::Duration::from_millis(500));
-    }
+    // ── Phase B: REMOVED ──
+    // Previously killed processes on port 18789 via netstat+taskkill,
+    // but this was killing WSL2 port-forwarding proxies and breaking
+    // WSL networking. Lock-file cleanup (Phase A) is sufficient.
+    // The Launcher now uses port 18800+ to avoid conflicts entirely.
 }
 
 /// Auto-fix invalid config keys before gateway startup.
