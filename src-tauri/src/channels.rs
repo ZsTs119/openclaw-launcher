@@ -630,18 +630,17 @@ pub fn unbind_channel(platform: String) -> Result<(), String> {
 
 // ──────────────────────────────── Plugin allow-list ───────────────────
 
-/// Pre-inject `plugins.allow` into openclaw.json so the gateway accepts
-/// non-bundled channel plugins (openclaw-lark, openclaw-weixin).
+/// Clean `plugins.allow` in openclaw.json at gateway startup.
 ///
-/// IMPORTANT: Only adds plugins that are actually installed in
-/// `~/.openclaw/extensions/<plugin_id>/`. The gateway validates the config
-/// and rejects plugin IDs that don't have installed extensions.
+/// STRATEGY: At startup, REMOVE our managed plugin IDs from plugins.allow.
+/// We do NOT add plugins here — adding broken/unloadable plugins causes
+/// gateway config validation errors that block startup entirely.
 ///
-/// Called from:
-/// 1. `service::start_service()` Stage ③ — before gateway spawn (ideal, zero-restart)
-/// 2. `start_channel_binding()` — fallback if gateway was started externally
+/// The gateway will auto-discover installed extensions and warn about
+/// auto-loading, which is a harmless warning (not a blocking error).
 ///
-/// Returns true if config was modified (caller may need to restart gateway).
+/// Plugin allow-listing should only happen during explicit binding flow
+/// after verifying the plugin actually loads correctly.
 pub fn ensure_plugins_allowed() -> bool {
     let openclaw_dir = match get_user_openclaw_dir() {
         Ok(dir) => dir,
@@ -651,101 +650,57 @@ pub fn ensure_plugins_allowed() -> bool {
         }
     };
     let config_path = openclaw_dir.join("openclaw.json");
-    let extensions_dir = openclaw_dir.join("extensions");
-
-    eprintln!("[plugins-allow] config: {:?}", config_path);
-    eprintln!("[plugins-allow] extensions: {:?}", extensions_dir);
 
     if !config_path.exists() {
-        eprintln!("[plugins-allow] config file does not exist, skipping");
         return false;
     }
 
     let raw = match std::fs::read_to_string(&config_path) {
         Ok(c) => c,
-        Err(e) => {
-            eprintln!("[plugins-allow] read failed: {}", e);
-            return false;
-        }
+        Err(_) => return false,
     };
 
     let mut config: serde_json::Value = match serde_json::from_str(&raw) {
         Ok(v) => v,
-        Err(e) => {
-            eprintln!("[plugins-allow] parse failed: {}", e);
-            return false;
-        }
+        Err(_) => return false,
     };
 
-    // Check which plugins are actually installed
-    let installed: Vec<&str> = PLATFORMS
+    // Collect our managed plugin IDs
+    let our_plugin_ids: Vec<&str> = PLATFORMS
         .iter()
-        .filter(|p| p.available && !p.plugin_id.is_empty())
-        .filter(|p| extensions_dir.join(p.plugin_id).exists())
+        .filter(|p| !p.plugin_id.is_empty())
         .map(|p| p.plugin_id)
         .collect();
-    eprintln!("[plugins-allow] installed extensions: {:?}", installed);
 
-    // Check current plugins.allow
-    let current_allow = config.get("plugins")
-        .and_then(|p| p.get("allow"));
-    eprintln!("[plugins-allow] current plugins.allow: {:?}", current_allow);
+    // Check if plugins.allow exists as an array
+    let has_allow = config.get("plugins")
+        .and_then(|p| p.get("allow"))
+        .and_then(|a| a.as_array())
+        .is_some();
 
-    // Wildcard — skip
-    if current_allow.and_then(|a| a.as_str()) == Some("*") {
-        eprintln!("[plugins-allow] wildcard '*', skipping");
+    if !has_allow {
         return false;
-    }
-
-    // No plugins.allow and nothing to add — skip
-    let has_allow = current_allow.and_then(|a| a.as_array()).is_some();
-    if !has_allow && installed.is_empty() {
-        eprintln!("[plugins-allow] no allow array and nothing to install, skipping");
-        return false;
-    }
-
-    // Ensure plugins.allow is an array we can work with
-    if config.get("plugins").is_none() {
-        config["plugins"] = serde_json::json!({});
-    }
-    if !config["plugins"].get("allow").and_then(|a| a.as_array()).is_some() {
-        config["plugins"]["allow"] = serde_json::json!([]);
     }
 
     let allow_arr = config["plugins"]["allow"].as_array_mut().unwrap();
-    let before: Vec<String> = allow_arr.iter()
-        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-        .collect();
+    let original_len = allow_arr.len();
 
-    // CLEAN: remove plugin IDs whose extensions don't exist
+    // Remove ALL our managed plugin IDs from plugins.allow
     allow_arr.retain(|v| {
         if let Some(id) = v.as_str() {
-            let is_ours = PLATFORMS.iter().any(|p| p.plugin_id == id);
+            let is_ours = our_plugin_ids.contains(&id);
             if is_ours {
-                let exists = extensions_dir.join(id).exists();
-                if !exists {
-                    eprintln!("[plugins-allow] removing stale: {}", id);
-                }
-                exists
-            } else {
-                true
+                eprintln!("[plugins-allow] removing managed plugin: {}", id);
             }
+            !is_ours
         } else {
             true
         }
     });
 
-    // ADD: install missing plugin IDs
-    let mut changed = allow_arr.len() != before.len();
-    for id in &installed {
-        if !allow_arr.iter().any(|v| v.as_str() == Some(id)) {
-            eprintln!("[plugins-allow] adding: {}", id);
-            allow_arr.push(serde_json::json!(id));
-            changed = true;
-        }
-    }
+    let changed = allow_arr.len() != original_len;
 
-    // If empty, remove the key entirely
+    // If plugins.allow is now empty, remove the key entirely
     if allow_arr.is_empty() {
         if let Some(plugins) = config.get_mut("plugins") {
             if let Some(obj) = plugins.as_object_mut() {
@@ -755,42 +710,17 @@ pub fn ensure_plugins_allowed() -> bool {
         if config.get("plugins").and_then(|p| p.as_object()).map_or(false, |o| o.is_empty()) {
             config.as_object_mut().map(|o| o.remove("plugins"));
         }
-        changed = !before.is_empty();
     }
 
-    let after: Option<Vec<String>> = config.get("plugins")
-        .and_then(|p| p.get("allow"))
-        .and_then(|a| a.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect());
-
-    eprintln!("[plugins-allow] before: {:?} -> after: {:?}, changed: {}", before, after, changed);
-
     if changed {
-        match serde_json::to_string_pretty(&config) {
-            Ok(output) => {
-                // Retry write up to 3 times (file might be locked on Windows)
-                let mut written = false;
-                for attempt in 1..=3 {
-                    match std::fs::write(&config_path, &output) {
-                        Ok(_) => {
-                            eprintln!("[plugins-allow] config written successfully (attempt {})", attempt);
-                            written = true;
-                            break;
-                        }
-                        Err(e) => {
-                            eprintln!("[plugins-allow] write failed (attempt {}): {}", attempt, e);
-                            std::thread::sleep(std::time::Duration::from_millis(200));
-                        }
-                    }
-                }
-                if !written {
-                    eprintln!("[plugins-allow] FAILED to write config after 3 attempts!");
-                }
-            }
-            Err(e) => {
-                eprintln!("[plugins-allow] serialize failed: {}", e);
+        if let Ok(output) = serde_json::to_string_pretty(&config) {
+            match std::fs::write(&config_path, &output) {
+                Ok(_) => eprintln!("[plugins-allow] cleaned config successfully"),
+                Err(e) => eprintln!("[plugins-allow] write failed: {}", e),
             }
         }
+    } else {
+        eprintln!("[plugins-allow] no managed plugins in allow list, nothing to clean");
     }
 
     changed
