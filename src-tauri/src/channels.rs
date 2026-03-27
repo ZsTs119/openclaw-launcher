@@ -619,10 +619,11 @@ pub fn unbind_channel(platform: String) -> Result<(), String> {
 
 // ──────────────────────────────── Plugin allow-list ───────────────────
 
-/// Set `plugins.allow: "*"` in openclaw.json before gateway startup.
+/// Remove `plugins.allow` from openclaw.json before gateway startup.
 ///
-/// This allows the gateway to auto-load ALL extensions in ~/.openclaw/extensions/
-/// without needing to list each plugin ID individually.
+/// Without `plugins.allow`, the gateway auto-discovers and auto-loads
+/// ALL extensions in ~/.openclaw/extensions/ (with a harmless warning).
+/// This avoids config validation errors from listing broken plugins.
 ///
 /// Called from service::start_service() Stage ③.
 pub fn ensure_plugins_allowed() -> bool {
@@ -645,23 +646,20 @@ pub fn ensure_plugins_allowed() -> bool {
         Err(_) => return false,
     };
 
-    // Already set to wildcard — nothing to do
-    if config.get("plugins")
-        .and_then(|p| p.get("allow"))
-        .and_then(|a| a.as_str()) == Some("*")
-    {
+    // Check if plugins section exists
+    let has_plugins = config.get("plugins").is_some();
+    if !has_plugins {
         return false;
     }
 
-    // Set plugins.allow = "*"
-    if config.get("plugins").is_none() {
-        config["plugins"] = serde_json::json!({});
+    // Remove the entire plugins section
+    if let Some(obj) = config.as_object_mut() {
+        obj.remove("plugins");
     }
-    config["plugins"]["allow"] = serde_json::json!("*");
 
     if let Ok(output) = serde_json::to_string_pretty(&config) {
         match std::fs::write(&config_path, &output) {
-            Ok(_) => eprintln!("[plugins-allow] set plugins.allow = \"*\""),
+            Ok(_) => eprintln!("[plugins-allow] removed plugins section from config"),
             Err(e) => eprintln!("[plugins-allow] write failed: {}", e),
         }
     }
