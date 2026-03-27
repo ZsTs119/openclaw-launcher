@@ -334,7 +334,7 @@ pub async fn start_service(
 
     if let Some(stdout) = stdout {
         let app_out = app_clone.clone();
-        let open_port = chosen_port;  // Copy for thread
+        let open_port = chosen_port;
         std::thread::spawn(move || {
             let reader = BufReader::new(stdout);
             let mut browser_opened = false;
@@ -342,9 +342,14 @@ pub async fn start_service(
                 if let Ok(line) = line {
                     let level = classify_log_level(&line);
 
-                    // Detect service ready — just emit a log, frontend handles browser opening
+                    // Auto-open browser when gateway is ready
                     if !browser_opened && is_service_ready_signal(&line) {
                         browser_opened = true;
+                        let url = format!(
+                            "http://localhost:{}?token=openclaw-launcher-local",
+                            open_port
+                        );
+                        let _ = open::that(&url);
                     }
 
                     let _ = app_out.emit("service-log", serde_json::json!({

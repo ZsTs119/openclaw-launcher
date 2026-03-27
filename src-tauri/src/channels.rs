@@ -230,17 +230,14 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         }
     }
 
-    // Fallback: ensure plugins.allow is set even if gateway was started externally.
-    // If config was just modified, the running gateway won't pick it up until restart,
-    // but we still inject it so the CLI tool can register with the gateway.
-    let plugins_just_injected = ensure_plugins_allowed();
-    if plugins_just_injected {
-        let _ = app.emit("binding-progress", serde_json::json!({
-            "platform": platform,
-            "stage": "plugins_injected",
-            "message": "已自动配置插件权限",
-        }));
-    }
+    // Inject the specific plugin for this platform into plugins.allow
+    // so the gateway accepts it during binding.
+    inject_plugin_for_binding(&pdef.plugin_id);
+    let _ = app.emit("binding-progress", serde_json::json!({
+        "platform": platform,
+        "stage": "plugins_injected",
+        "message": "已自动配置插件权限",
+    }));
 
     let _ = app.emit("binding-progress", serde_json::json!({
         "platform": platform,
@@ -629,6 +626,63 @@ pub fn unbind_channel(platform: String) -> Result<(), String> {
 }
 
 // ──────────────────────────────── Plugin allow-list ───────────────────
+
+/// Inject a SINGLE plugin ID into plugins.allow for binding.
+/// Called from start_channel_binding before spawning the CLI.
+///
+/// Unlike ensure_plugins_allowed() (cleanup-only at startup),
+/// this explicitly ADDS the plugin so the gateway accepts it.
+fn inject_plugin_for_binding(plugin_id: &str) {
+    if plugin_id.is_empty() {
+        return;
+    }
+    let openclaw_dir = match get_user_openclaw_dir() {
+        Ok(dir) => dir,
+        Err(_) => return,
+    };
+    let config_path = openclaw_dir.join("openclaw.json");
+
+    if !config_path.exists() {
+        return;
+    }
+
+    let raw = match std::fs::read_to_string(&config_path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let mut config: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+
+    // If wildcard, no need to add
+    if config.get("plugins")
+        .and_then(|p| p.get("allow"))
+        .and_then(|a| a.as_str()) == Some("*")
+    {
+        return;
+    }
+
+    // Ensure plugins.allow exists as array
+    if config.get("plugins").is_none() {
+        config["plugins"] = serde_json::json!({});
+    }
+    if !config["plugins"].get("allow").and_then(|a| a.as_array()).is_some() {
+        config["plugins"]["allow"] = serde_json::json!([]);
+    }
+
+    let allow_arr = config["plugins"]["allow"].as_array_mut().unwrap();
+
+    // Add if not already present
+    if !allow_arr.iter().any(|v| v.as_str() == Some(plugin_id)) {
+        allow_arr.push(serde_json::json!(plugin_id));
+        eprintln!("[plugins-allow] injected for binding: {}", plugin_id);
+
+        if let Ok(output) = serde_json::to_string_pretty(&config) {
+            let _ = std::fs::write(&config_path, output);
+        }
+    }
+}
 
 /// Clean `plugins.allow` in openclaw.json at gateway startup.
 ///
