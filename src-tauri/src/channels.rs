@@ -338,6 +338,7 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
             .stderr(Stdio::piped());
         #[cfg(target_os = "windows")]
         {
+            #[allow(unused_imports)]
             use std::os::windows::process::CommandExt;
             cmd.creation_flags(0x08000000);
         }
@@ -727,10 +728,6 @@ pub fn ensure_plugins_allowed() -> bool {
         if let Some(plugins) = config.get_mut("plugins") {
             if let Some(obj) = plugins.as_object_mut() {
                 obj.remove("allow");
-                // If plugins object is now empty, remove it too
-                if obj.is_empty() {
-                    changed = true;
-                }
             }
         }
         if config.get("plugins").and_then(|p| p.as_object()).map_or(false, |o| o.is_empty()) {
@@ -738,7 +735,7 @@ pub fn ensure_plugins_allowed() -> bool {
                 obj.remove("plugins");
             }
         }
-        changed = original_len > 0; // changed if we removed entries
+        changed = original_len > 0;
     }
 
     if changed {

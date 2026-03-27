@@ -553,45 +553,6 @@ fn auto_fix_config(
     }
 }
 
-/// Kill whatever process is listening on the given port.
-fn kill_process_on_port(port: u16) {
-    #[cfg(unix)]
-    {
-        // Use lsof to find PID, then kill
-        if let Ok(output) = std::process::Command::new("lsof")
-            .args(["-ti", &format!(":{}", port)])
-            .output()
-        {
-            let pids = String::from_utf8_lossy(&output.stdout);
-            for pid_str in pids.lines() {
-                if let Ok(pid) = pid_str.trim().parse::<u32>() {
-                    kill_process(pid);
-                }
-            }
-        }
-    }
-    #[cfg(windows)]
-    {
-        // Use netstat to find PID, then taskkill
-        if let Ok(output) = std::process::Command::new("netstat")
-            .args(["-ano"])
-            .output()
-        {
-            let text = String::from_utf8_lossy(&output.stdout);
-            let port_str = format!(":{}", port);
-            for line in text.lines() {
-                if line.contains(&port_str) && line.contains("LISTENING") {
-                    // Last column is PID
-                    if let Some(pid_str) = line.split_whitespace().last() {
-                        if let Ok(pid) = pid_str.trim().parse::<u32>() {
-                            kill_process(pid);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 /// Get the lock directory path (platform-specific)
 fn get_lock_dir() -> std::path::PathBuf {
