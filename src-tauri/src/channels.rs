@@ -619,11 +619,14 @@ pub fn unbind_channel(platform: String) -> Result<(), String> {
 
 // ──────────────────────────────── Plugin allow-list ───────────────────
 
-/// Remove `plugins.allow` from openclaw.json before gateway startup.
+/// Inject `plugins.allow` into openclaw.json before gateway startup.
 ///
-/// Without `plugins.allow`, the gateway auto-discovers and auto-loads
-/// ALL extensions in ~/.openclaw/extensions/ (with a harmless warning).
-/// This avoids config validation errors from listing broken plugins.
+/// Sets `plugins.allow: ["openclaw-weixin", "openclaw-lark"]` so the gateway
+/// explicitly loads these channel plugins. The v2026.3.2+ engine correctly
+/// resolves plugin-sdk subpaths (channel-config-schema).
+///
+/// Also handles edge case: if plugins.allow was previously set to a string
+/// (e.g. "*" from an earlier version), it is replaced with the correct array.
 ///
 /// Called from service::start_service() Stage ③.
 pub fn ensure_plugins_allowed() -> bool {
@@ -646,20 +649,55 @@ pub fn ensure_plugins_allowed() -> bool {
         Err(_) => return false,
     };
 
-    // Check if plugins section exists
-    let has_plugins = config.get("plugins").is_some();
-    if !has_plugins {
-        return false;
+    // Collect our managed plugin IDs
+    let desired: Vec<&str> = PLATFORMS
+        .iter()
+        .filter(|p| !p.plugin_id.is_empty())
+        .map(|p| p.plugin_id)
+        .collect();
+
+    // Check current state of plugins.allow
+    let current_allow = config.get("plugins").and_then(|p| p.get("allow"));
+
+    // Already correct? (array containing all our IDs)
+    if let Some(arr) = current_allow.and_then(|a| a.as_array()) {
+        let all_present = desired.iter().all(|id| {
+            arr.iter().any(|v| v.as_str() == Some(id))
+        });
+        if all_present {
+            return false; // Already set correctly
+        }
     }
 
-    // Remove the entire plugins section
-    if let Some(obj) = config.as_object_mut() {
-        obj.remove("plugins");
+    // Ensure plugins object exists
+    if config.get("plugins").is_none() {
+        config["plugins"] = serde_json::json!({});
     }
+
+    // Build the allow array (merge with any existing non-managed entries)
+    let mut allow_set: Vec<String> = Vec::new();
+
+    // Keep existing non-managed entries if plugins.allow is already an array
+    if let Some(arr) = config["plugins"].get("allow").and_then(|a| a.as_array()) {
+        for v in arr {
+            if let Some(id) = v.as_str() {
+                if !desired.contains(&id) {
+                    allow_set.push(id.to_string());
+                }
+            }
+        }
+    }
+
+    // Add our managed IDs
+    for id in &desired {
+        allow_set.push(id.to_string());
+    }
+
+    config["plugins"]["allow"] = serde_json::json!(allow_set);
 
     if let Ok(output) = serde_json::to_string_pretty(&config) {
         match std::fs::write(&config_path, &output) {
-            Ok(_) => eprintln!("[plugins-allow] removed plugins section from config"),
+            Ok(_) => eprintln!("[plugins-allow] injected: {:?}", desired),
             Err(e) => eprintln!("[plugins-allow] write failed: {}", e),
         }
     }

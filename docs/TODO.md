@@ -229,12 +229,14 @@
 - [ ] 飞书配置引导（开放平台 → App ID/Secret → 事件订阅）
 - [ ] 平台连接状态展示 + 编辑/删除
 
-#### 9.6 插件预加载（plugins.allow 自动注入）
-- [ ] `ensure_plugins_allowed()`: gateway 启动前注入 `plugins.allow` 到 `openclaw.json`
-- [ ] `service.rs` Stage③ 调用 `ensure_plugins_allowed()`
-- [ ] `channels.rs` fallback 检查 + 友好提示
-- [ ] 微信绑定 QR 码生成 → 扫码绑定
-- [ ] 飞书绑定 QR 码生成 → 扫码绑定
+#### 9.6 插件预加载 + 引擎升级
+- [x] `PINNED_VERSION` 升级 `v2026.2.6-1` → `v2026.3.2`（修复 plugin-sdk channel-config-schema）✅
+- [x] `ensure_plugins_allowed()`: gateway 启动前注入 `plugins.allow` 到 `openclaw.json` ✅
+- [x] `service.rs` Stage③ 调用 `ensure_plugins_allowed()` ✅
+- [x] 浏览器自动打开（gateway ready → open::that）✅
+- [x] WSL 端口安全（18800 基准 + 移除 kill_process_on_port）✅
+- [ ] 微信绑定 QR 码生成 → 扫码绑定（待验证）
+- [ ] 飞书绑定 QR 码生成 → 扫码绑定（待验证）
 
 ### 🌐 Phase 10: i18n + Ollama + 数据统计 → `v0.8.0`
 - [ ] i18n 国际化: `react-i18next`（zh-CN + en）

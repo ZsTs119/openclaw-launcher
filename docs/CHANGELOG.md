@@ -5,15 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — Phase 9.6: 插件预加载
+## [Unreleased] — Phase 9.7: 引擎升级 + 插件修复
 
-### 文档变更
-- `phase9_channels.md` 新增 9.6 插件预加载方案（三层预加载 + 边界处理）
-- `TODO.md` 新增 Phase 9.6 任务项
-
-### 待实现
-- `ensure_plugins_allowed()`: gateway 启动前自动注入 `plugins.allow`
-- channels 绑定 fallback 检查 + 友好提示
+### 变更
+- **引擎升级**: `PINNED_VERSION` 从 `v2026.2.6-1` → `v2026.3.2`，修复 plugin-sdk `channel-config-schema` 模块解析错误
+- **plugins.allow 注入**: 启动时自动注入 `["openclaw-weixin", "openclaw-lark"]`，新版引擎可正确加载
+- **浏览器自动打开**: gateway ready 信号后自动打开 Control UI
+- **WSL 端口安全**: 默认端口 18800，避免 WSL2 端口转发冲突
 
 ---
 
