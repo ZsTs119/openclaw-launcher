@@ -43,7 +43,8 @@ struct PlatformDef {
     name: &'static str,
     install_cmd: &'static str,
     config_key: &'static str,
-    plugin_id: &'static str,  // OpenClaw gateway plugin ID for plugins.allow
+    plugin_id: &'static str,      // OpenClaw gateway plugin ID for plugins.allow
+    npm_package: &'static str,     // npm package name for `openclaw plugins install`
     bind_mode: &'static str,
     available: bool,
 }
@@ -55,6 +56,7 @@ const PLATFORMS: &[PlatformDef] = &[
         install_cmd: "@tencent-weixin/openclaw-weixin-cli@latest install",
         config_key: "wechat",
         plugin_id: "openclaw-weixin",
+        npm_package: "@tencent-weixin/openclaw-weixin",
         bind_mode: "qrcode",
         available: true,
     },
@@ -64,6 +66,7 @@ const PLATFORMS: &[PlatformDef] = &[
         install_cmd: "@larksuite/openclaw-lark install",
         config_key: "feishu",
         plugin_id: "openclaw-lark",
+        npm_package: "@larksuite/openclaw-lark",
         bind_mode: "qrcode",
         available: true,
     },
@@ -73,6 +76,7 @@ const PLATFORMS: &[PlatformDef] = &[
         install_cmd: "",
         config_key: "telegram",
         plugin_id: "",
+        npm_package: "",
         bind_mode: "token",
         available: false,
     },
@@ -82,6 +86,7 @@ const PLATFORMS: &[PlatformDef] = &[
         install_cmd: "",
         config_key: "discord",
         plugin_id: "",
+        npm_package: "",
         bind_mode: "token",
         available: false,
     },
@@ -91,6 +96,7 @@ const PLATFORMS: &[PlatformDef] = &[
         install_cmd: "",
         config_key: "qq",
         plugin_id: "",
+        npm_package: "",
         bind_mode: "manual",
         available: false,
     },
@@ -719,6 +725,68 @@ pub fn ensure_plugins_allowed() -> bool {
     }
 
     true
+}
+
+/// Pre-install missing channel extensions before gateway startup.
+///
+/// For each platform with a non-empty `npm_package`, checks if its extension
+/// directory exists in `~/.openclaw/extensions/`. If missing, runs:
+///   `node scripts/run-node.mjs plugins install <npm_package>`
+///
+/// Called from service::start_service() Stage ③, before ensure_plugins_allowed().
+pub fn ensure_extensions_installed(node_bin: &std::path::Path, openclaw_dir: &std::path::Path) {
+    let extensions_dir = match get_user_openclaw_dir() {
+        Ok(dir) => dir.join("extensions"),
+        Err(_) => return,
+    };
+
+    let run_script = openclaw_dir.join("scripts").join("run-node.mjs");
+    if !run_script.exists() {
+        eprintln!("[extensions] run-node.mjs not found, skipping pre-install");
+        return;
+    }
+
+    for p in PLATFORMS {
+        if p.npm_package.is_empty() || p.plugin_id.is_empty() {
+            continue;
+        }
+        let ext_dir = extensions_dir.join(p.plugin_id);
+        if ext_dir.join("openclaw.plugin.json").exists() {
+            continue; // Already installed
+        }
+
+        eprintln!("[extensions] installing missing extension: {} ({})", p.plugin_id, p.npm_package);
+
+        let mut cmd = std::process::Command::new(node_bin);
+        cmd.arg(&run_script)
+            .arg("plugins")
+            .arg("install")
+            .arg(p.npm_package)
+            .current_dir(openclaw_dir)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+
+        match cmd.output() {
+            Ok(output) => {
+                if output.status.success() {
+                    eprintln!("[extensions] installed: {}", p.plugin_id);
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    let snippet: String = stderr.chars().take(200).collect();
+                    eprintln!("[extensions] install failed for {}: {}", p.plugin_id, snippet);
+                }
+            }
+            Err(e) => {
+                eprintln!("[extensions] failed to run install for {}: {}", p.plugin_id, e);
+            }
+        }
+    }
 }
 
 // ──────────────────────────────── Internal helpers ────────────────────
