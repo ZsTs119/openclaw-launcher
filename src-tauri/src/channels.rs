@@ -649,12 +649,28 @@ pub fn ensure_plugins_allowed() -> bool {
         Err(_) => return false,
     };
 
-    // Collect our managed plugin IDs
+    // Collect plugin IDs — only for extensions actually installed in ~/.openclaw/extensions/
+    let extensions_dir = openclaw_dir.join("extensions");
     let desired: Vec<&str> = PLATFORMS
         .iter()
         .filter(|p| !p.plugin_id.is_empty())
+        .filter(|p| extensions_dir.join(p.plugin_id).exists())
         .map(|p| p.plugin_id)
         .collect();
+
+    // Nothing installed? Remove plugins section to avoid empty-array issues
+    if desired.is_empty() {
+        if config.get("plugins").is_some() {
+            if let Some(obj) = config.as_object_mut() {
+                obj.remove("plugins");
+            }
+            if let Ok(output) = serde_json::to_string_pretty(&config) {
+                let _ = std::fs::write(&config_path, &output);
+                eprintln!("[plugins-allow] no extensions installed, removed plugins section");
+            }
+        }
+        return false;
+    }
 
     // Check current state of plugins.allow
     let current_allow = config.get("plugins").and_then(|p| p.get("allow"));
