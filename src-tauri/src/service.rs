@@ -255,10 +255,12 @@ pub async fn start_service(
     // Stage ③ Config Auto-Fix
     // ══════════════════════════════════════════════════════════════════
     auto_fix_config(&app, &node_bin, &openclaw_dir);
-    // Pre-install missing channel extensions (feishu/wechat)
+    // Step 1: Clean stale plugins.allow (removes IDs for uninstalled extensions)
+    // This prevents `plugins install` from failing on "plugin not found" validation.
+    crate::channels::ensure_plugins_allowed();
+    // Step 2: Install missing channel extensions (feishu/wechat)
     crate::channels::ensure_extensions_installed(&node_bin, &openclaw_dir);
-    // Pre-inject plugins.allow for channel binding (feishu/wechat)
-    // Must happen AFTER extensions are installed and BEFORE gateway spawns.
+    // Step 3: Re-inject plugins.allow with newly installed extensions
     crate::channels::ensure_plugins_allowed();
     // ══════════════════════════════════════════════════════════════════
     // Stage ④ Port Allocation
