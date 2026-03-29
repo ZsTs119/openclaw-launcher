@@ -730,21 +730,37 @@ pub fn ensure_plugins_allowed() -> bool {
 /// Pre-install missing channel extensions before gateway startup.
 ///
 /// For each platform with a non-empty `npm_package`, checks if its extension
-/// directory exists in `~/.openclaw/extensions/`. If missing, runs:
-///   `node scripts/run-node.mjs plugins install <npm_package>`
+/// exists in `~/.openclaw/extensions/`. If missing, downloads via `npm pack`
+/// and extracts to the correct directory.
 ///
-/// Called from service::start_service() Stage ③, before ensure_plugins_allowed().
-pub fn ensure_extensions_installed(node_bin: &std::path::Path, openclaw_dir: &std::path::Path) {
-    let extensions_dir = match get_user_openclaw_dir() {
-        Ok(dir) => dir.join("extensions"),
+/// We bypass `openclaw plugins install` because it has an internal
+/// chicken-and-egg bug: it writes the plugin ID to plugins.allow then
+/// validates config before downloading, so fresh installs always fail.
+///
+/// Called from service::start_service() Stage ③.
+pub fn ensure_extensions_installed(node_bin: &std::path::Path, _openclaw_dir: &std::path::Path) {
+    let openclaw_home = match get_user_openclaw_dir() {
+        Ok(dir) => dir,
         Err(_) => return,
     };
+    let extensions_dir = openclaw_home.join("extensions");
+    let _ = std::fs::create_dir_all(&extensions_dir);
 
-    let run_script = openclaw_dir.join("scripts").join("run-node.mjs");
-    if !run_script.exists() {
-        eprintln!("[extensions] run-node.mjs not found, skipping pre-install");
-        return;
-    }
+    // Resolve npm command
+    let npm_cmd = {
+        // Use npm from the same directory as node
+        let npm_name = if cfg!(target_os = "windows") { "npm.cmd" } else { "npm" };
+        if let Some(node_dir) = node_bin.parent() {
+            let npm_path = node_dir.join(npm_name);
+            if npm_path.exists() {
+                npm_path.to_string_lossy().to_string()
+            } else {
+                npm_name.to_string()
+            }
+        } else {
+            npm_name.to_string()
+        }
+    };
 
     for p in PLATFORMS {
         if p.npm_package.is_empty() || p.plugin_id.is_empty() {
@@ -755,37 +771,141 @@ pub fn ensure_extensions_installed(node_bin: &std::path::Path, openclaw_dir: &st
             continue; // Already installed
         }
 
-        eprintln!("[extensions] installing missing extension: {} ({})", p.plugin_id, p.npm_package);
+        eprintln!("[extensions] installing: {} via npm", p.plugin_id);
 
-        let mut cmd = std::process::Command::new(node_bin);
-        cmd.arg(&run_script)
-            .arg("plugins")
-            .arg("install")
+        // Step 1: npm pack <package> — downloads tarball to cwd
+        let tmp_dir = extensions_dir.join("_tmp_install");
+        let _ = std::fs::create_dir_all(&tmp_dir);
+
+        let mut pack_cmd = std::process::Command::new(&npm_cmd);
+        pack_cmd
+            .arg("pack")
             .arg(p.npm_package)
-            .current_dir(openclaw_dir)
+            .arg("--pack-destination")
+            .arg(tmp_dir.to_string_lossy().to_string())
+            .current_dir(&extensions_dir)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
 
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x08000000);
+            pack_cmd.creation_flags(0x08000000);
         }
 
-        match cmd.output() {
-            Ok(output) => {
-                if output.status.success() {
-                    eprintln!("[extensions] installed: {}", p.plugin_id);
+        let pack_output = match pack_cmd.output() {
+            Ok(o) => o,
+            Err(e) => {
+                eprintln!("[extensions] npm pack failed for {}: {}", p.plugin_id, e);
+                let _ = std::fs::remove_dir_all(&tmp_dir);
+                continue;
+            }
+        };
+
+        if !pack_output.status.success() {
+            let stderr = String::from_utf8_lossy(&pack_output.stderr);
+            let snippet: String = stderr.chars().take(200).collect();
+            eprintln!("[extensions] npm pack error for {}: {}", p.plugin_id, snippet);
+            let _ = std::fs::remove_dir_all(&tmp_dir);
+            continue;
+        }
+
+        // Find the downloaded .tgz file
+        let tgz_file = std::fs::read_dir(&tmp_dir)
+            .ok()
+            .and_then(|mut entries| {
+                entries.find_map(|e| {
+                    let path = e.ok()?.path();
+                    if path.extension().and_then(|e| e.to_str()) == Some("tgz") {
+                        Some(path)
+                    } else {
+                        None
+                    }
+                })
+            });
+
+        let tgz_path = match tgz_file {
+            Some(p) => p,
+            None => {
+                eprintln!("[extensions] no .tgz found after npm pack for {}", p.plugin_id);
+                let _ = std::fs::remove_dir_all(&tmp_dir);
+                continue;
+            }
+        };
+
+        // Step 2: Extract tarball (npm pack creates standard tar.gz with package/ prefix)
+        let extract_dir = tmp_dir.join("extract");
+        let _ = std::fs::create_dir_all(&extract_dir);
+
+        let mut tar_cmd = if cfg!(target_os = "windows") {
+            let mut c = std::process::Command::new("tar");
+            c.arg("-xzf")
+                .arg(tgz_path.to_string_lossy().to_string())
+                .arg("-C")
+                .arg(extract_dir.to_string_lossy().to_string());
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                c.creation_flags(0x08000000);
+            }
+            c
+        } else {
+            let mut c = std::process::Command::new("tar");
+            c.arg("-xzf")
+                .arg(tgz_path.to_string_lossy().to_string())
+                .arg("-C")
+                .arg(extract_dir.to_string_lossy().to_string());
+            c
+        };
+
+        if tar_cmd.output().map(|o| o.status.success()).unwrap_or(false) {
+            // npm pack extracts to package/ subdirectory
+            let pkg_dir = extract_dir.join("package");
+            if pkg_dir.exists() {
+                // Move to final location
+                let _ = std::fs::remove_dir_all(&ext_dir);
+                if std::fs::rename(&pkg_dir, &ext_dir).is_ok() {
+                    // Step 3: Install production dependencies
+                    let mut install_cmd = std::process::Command::new(&npm_cmd);
+                    install_cmd
+                        .arg("install")
+                        .arg("--production")
+                        .arg("--ignore-scripts")
+                        .current_dir(&ext_dir)
+                        .stdout(std::process::Stdio::piped())
+                        .stderr(std::process::Stdio::piped());
+
+                    #[cfg(target_os = "windows")]
+                    {
+                        use std::os::windows::process::CommandExt;
+                        install_cmd.creation_flags(0x08000000);
+                    }
+
+                    match install_cmd.output() {
+                        Ok(o) if o.status.success() => {
+                            eprintln!("[extensions] installed: {}", p.plugin_id);
+                        }
+                        Ok(o) => {
+                            let stderr = String::from_utf8_lossy(&o.stderr);
+                            let snippet: String = stderr.chars().take(150).collect();
+                            eprintln!("[extensions] npm install deps warning for {}: {}", p.plugin_id, snippet);
+                            // Continue anyway — deps may be optional
+                            eprintln!("[extensions] installed (with warnings): {}", p.plugin_id);
+                        }
+                        Err(e) => {
+                            eprintln!("[extensions] npm install deps failed for {}: {}", p.plugin_id, e);
+                        }
+                    }
                 } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let snippet: String = stderr.chars().take(200).collect();
-                    eprintln!("[extensions] install failed for {}: {}", p.plugin_id, snippet);
+                    eprintln!("[extensions] failed to move {} to extensions dir", p.plugin_id);
                 }
             }
-            Err(e) => {
-                eprintln!("[extensions] failed to run install for {}: {}", p.plugin_id, e);
-            }
+        } else {
+            eprintln!("[extensions] tar extract failed for {}", p.plugin_id);
         }
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&tmp_dir);
     }
 }
 
