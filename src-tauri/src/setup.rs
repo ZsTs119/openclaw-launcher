@@ -331,27 +331,39 @@ pub fn patch_plugin_sdk_exports() {
         eprintln!("[setup] created {} plugin-sdk subpath shims in dist/plugin-sdk/", created);
     }
 
-    // Also patch package.json exports (belt-and-suspenders)
+    // Patch package.json exports with EXPLICIT per-subpath entries.
+    // jiti (used by run-node.mjs) does NOT support wildcard `*` patterns.
+    // Without explicit entries, jiti falls back to prefix matching on "./plugin-sdk"
+    // → resolves to "dist/plugin-sdk/index.js" → appends "/channel-config-schema"
+    // → tries "dist/plugin-sdk/index.js/channel-config-schema" (file as directory) → fails.
     let pkg_path = openclaw_dir.join("package.json");
     if let Ok(raw) = std::fs::read_to_string(&pkg_path) {
         if let Ok(mut pkg) = serde_json::from_str::<serde_json::Value>(&raw) {
-            let has_wildcard = pkg
+            // Check if we already patched (use first known subpath as sentinel)
+            let already_patched = pkg
                 .get("exports")
-                .and_then(|e| e.get("./plugin-sdk/*"))
+                .and_then(|e| e.get("./plugin-sdk/channel-config-schema"))
                 .is_some();
-            if !has_wildcard {
+            if !already_patched {
                 if let Some(exports) = pkg.get_mut("exports").and_then(|e| e.as_object_mut()) {
-                    exports.insert(
-                        "./plugin-sdk/*".to_string(),
-                        serde_json::json!({
-                            "types": "./dist/plugin-sdk/*.d.ts",
-                            "default": "./dist/plugin-sdk/*.js"
-                        }),
-                    );
+                    // Remove old wildcard if present (doesn't work with jiti)
+                    exports.remove("./plugin-sdk/*");
+
+                    // Add explicit entry for each subpath
+                    for subpath in &shim_subpaths {
+                        let key = format!("./plugin-sdk/{}", subpath);
+                        exports.insert(
+                            key,
+                            serde_json::json!({
+                                "types": format!("./dist/plugin-sdk/{}.d.ts", subpath),
+                                "default": format!("./dist/plugin-sdk/{}.js", subpath)
+                            }),
+                        );
+                    }
                 }
                 if let Ok(output) = serde_json::to_string_pretty(&pkg) {
                     let _ = std::fs::write(&pkg_path, &output);
-                    eprintln!("[setup] patched engine package.json: added plugin-sdk/* wildcard export");
+                    eprintln!("[setup] patched engine package.json: added {} explicit plugin-sdk subpath exports", shim_subpaths.len());
                 }
             }
         }
