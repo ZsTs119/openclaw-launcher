@@ -255,6 +255,8 @@ pub async fn start_service(
     // Stage ③ Config Auto-Fix
     // ══════════════════════════════════════════════════════════════════
     auto_fix_config(&app, &node_bin, &openclaw_dir);
+    // Patch engine plugin-sdk exports (v2026.3.2 missing subpath wildcards)
+    crate::setup::patch_plugin_sdk_exports();
     // Step 1: Clean stale plugins.allow (removes IDs for uninstalled extensions)
     // This prevents `plugins install` from failing on "plugin not found" validation.
     crate::channels::ensure_plugins_allowed();

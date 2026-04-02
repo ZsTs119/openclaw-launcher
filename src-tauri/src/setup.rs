@@ -224,6 +224,9 @@ pub async fn setup_openclaw(app: tauri::AppHandle) -> Result<String, String> {
     // Step 3: Install npm dependencies
     installer::run_npm_install(app.clone()).await?;
 
+    // Step 3.5: Patch engine exports for plugin-sdk subpath resolution
+    patch_plugin_sdk_exports();
+
     // Step 4: Inject default configs (non-destructive)
     inject_default_config(app.clone())?;
     inject_default_models(app.clone())?;
@@ -241,6 +244,65 @@ pub async fn setup_openclaw(app: tauri::AppHandle) -> Result<String, String> {
     }));
 
     Ok("OpenClaw setup completed successfully".to_string())
+}
+
+/// Patch the engine's package.json exports to add wildcard plugin-sdk subpath.
+///
+/// v2026.3.2 only exports `./plugin-sdk` (the barrel), `./plugin-sdk/account-id`,
+/// and `./plugin-sdk/keyed-async-queue`. Channel extensions need subpaths like
+/// `./plugin-sdk/channel-config-schema` and `./plugin-sdk/channel-status` which
+/// are missing from the exports map.
+///
+/// This function adds `"./plugin-sdk/*"` → `"./dist/plugin-sdk/*.js"` so all
+/// subpaths resolve correctly.
+///
+/// Safe to call multiple times (idempotent).
+pub fn patch_plugin_sdk_exports() {
+    let openclaw_dir = match paths::get_openclaw_dir() {
+        Ok(dir) => dir,
+        Err(_) => return,
+    };
+    let pkg_path = openclaw_dir.join("package.json");
+    if !pkg_path.exists() {
+        return;
+    }
+
+    let raw = match std::fs::read_to_string(&pkg_path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let mut pkg: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+
+    // Check if wildcard export already exists
+    let has_wildcard = pkg
+        .get("exports")
+        .and_then(|e| e.get("./plugin-sdk/*"))
+        .is_some();
+
+    if has_wildcard {
+        return; // Already patched
+    }
+
+    // Add wildcard subpath export
+    if let Some(exports) = pkg.get_mut("exports").and_then(|e| e.as_object_mut()) {
+        exports.insert(
+            "./plugin-sdk/*".to_string(),
+            serde_json::json!({
+                "types": "./dist/plugin-sdk/*.d.ts",
+                "default": "./dist/plugin-sdk/*.js"
+            }),
+        );
+    }
+
+    if let Ok(output) = serde_json::to_string_pretty(&pkg) {
+        match std::fs::write(&pkg_path, &output) {
+            Ok(_) => eprintln!("[setup] patched engine package.json: added plugin-sdk/* wildcard export"),
+            Err(e) => eprintln!("[setup] failed to patch engine package.json: {}", e),
+        }
+    }
 }
 
 /// Clean up node_modules and re-run the full setup pipeline.
