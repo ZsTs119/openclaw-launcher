@@ -246,61 +246,130 @@ pub async fn setup_openclaw(app: tauri::AppHandle) -> Result<String, String> {
     Ok("OpenClaw setup completed successfully".to_string())
 }
 
-/// Patch the engine's package.json exports to add wildcard plugin-sdk subpath.
+/// Patch the engine's dist/plugin-sdk/ to create shim files for missing subpaths.
 ///
-/// v2026.3.2 only exports `./plugin-sdk` (the barrel), `./plugin-sdk/account-id`,
-/// and `./plugin-sdk/keyed-async-queue`. Channel extensions need subpaths like
-/// `./plugin-sdk/channel-config-schema` and `./plugin-sdk/channel-status` which
-/// are missing from the exports map.
+/// v2026.3.2's tsdown only compiles `index.ts` and `account-id.ts` as entries
+/// for plugin-sdk. The npm-published extensions (weixin, lark) import specific
+/// subpaths like `openclaw/plugin-sdk/channel-config-schema` and
+/// `openclaw/plugin-sdk/channel-status` that don't exist as compiled files.
 ///
-/// This function adds `"./plugin-sdk/*"` → `"./dist/plugin-sdk/*.js"` so all
-/// subpaths resolve correctly.
+/// The barrel `dist/plugin-sdk/index.js` DOES contain all exports (re-exported
+/// from internal modules). So we create shim files that simply re-export from
+/// the barrel, making subpath imports resolve correctly.
 ///
+/// Also patches package.json exports and cleans up staging directories.
 /// Safe to call multiple times (idempotent).
 pub fn patch_plugin_sdk_exports() {
     let openclaw_dir = match paths::get_openclaw_dir() {
         Ok(dir) => dir,
         Err(_) => return,
     };
-    let pkg_path = openclaw_dir.join("package.json");
-    if !pkg_path.exists() {
+
+    let plugin_sdk_dir = openclaw_dir.join("dist").join("plugin-sdk");
+    let barrel_file = plugin_sdk_dir.join("index.js");
+
+    if !barrel_file.exists() {
+        eprintln!("[setup] dist/plugin-sdk/index.js not found, skipping patch");
         return;
     }
 
-    let raw = match std::fs::read_to_string(&pkg_path) {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-    let mut pkg: serde_json::Value = match serde_json::from_str(&raw) {
-        Ok(v) => v,
-        Err(_) => return,
-    };
+    // Known subpaths that extensions import but aren't compiled as separate entries
+    let shim_subpaths = [
+        "channel-config-schema",
+        "channel-status",
+        "channel-lifecycle",
+        "channel-config-helpers",
+        "status-helpers",
+        "runtime",
+        "onboarding",
+        "webhook-path",
+        "webhook-targets",
+        "webhook-request-guards",
+        "webhook-memory-guards",
+        "run-command",
+        "windows-spawn",
+        "json-store",
+        "config-paths",
+        "file-lock",
+        "command-auth",
+        "oauth-utils",
+        "fetch-auth",
+        "ssrf-policy",
+        "text-chunking",
+        "tool-send",
+        "boolean-param",
+        "outbound-media",
+        "persistent-dedupe",
+        "resolution-notes",
+        "group-access",
+        "pairing-access",
+        "provider-auth-result",
+        "reply-payload",
+        "inbound-envelope",
+        "agent-media-payload",
+        "account-resolution",
+        "allow-from",
+        "slack-message-actions",
+    ];
 
-    // Check if wildcard export already exists
-    let has_wildcard = pkg
-        .get("exports")
-        .and_then(|e| e.get("./plugin-sdk/*"))
-        .is_some();
+    // The shim content — re-export everything from the barrel.
+    // Use CJS since the gateway loads extensions via require() (jiti/tsx).
+    let shim_content = "// Auto-generated shim — re-exports from plugin-sdk barrel\nmodule.exports = require('./index.js');\n";
 
-    if has_wildcard {
-        return; // Already patched
+    let mut created = 0;
+    for subpath in &shim_subpaths {
+        let shim_file = plugin_sdk_dir.join(format!("{}.js", subpath));
+        if shim_file.exists() {
+            continue; // Already exists (either real file or previously created shim)
+        }
+        if std::fs::write(&shim_file, shim_content).is_ok() {
+            created += 1;
+        }
     }
 
-    // Add wildcard subpath export
-    if let Some(exports) = pkg.get_mut("exports").and_then(|e| e.as_object_mut()) {
-        exports.insert(
-            "./plugin-sdk/*".to_string(),
-            serde_json::json!({
-                "types": "./dist/plugin-sdk/*.d.ts",
-                "default": "./dist/plugin-sdk/*.js"
-            }),
-        );
+    if created > 0 {
+        eprintln!("[setup] created {} plugin-sdk subpath shims in dist/plugin-sdk/", created);
     }
 
-    if let Ok(output) = serde_json::to_string_pretty(&pkg) {
-        match std::fs::write(&pkg_path, &output) {
-            Ok(_) => eprintln!("[setup] patched engine package.json: added plugin-sdk/* wildcard export"),
-            Err(e) => eprintln!("[setup] failed to patch engine package.json: {}", e),
+    // Also patch package.json exports (belt-and-suspenders)
+    let pkg_path = openclaw_dir.join("package.json");
+    if let Ok(raw) = std::fs::read_to_string(&pkg_path) {
+        if let Ok(mut pkg) = serde_json::from_str::<serde_json::Value>(&raw) {
+            let has_wildcard = pkg
+                .get("exports")
+                .and_then(|e| e.get("./plugin-sdk/*"))
+                .is_some();
+            if !has_wildcard {
+                if let Some(exports) = pkg.get_mut("exports").and_then(|e| e.as_object_mut()) {
+                    exports.insert(
+                        "./plugin-sdk/*".to_string(),
+                        serde_json::json!({
+                            "types": "./dist/plugin-sdk/*.d.ts",
+                            "default": "./dist/plugin-sdk/*.js"
+                        }),
+                    );
+                }
+                if let Ok(output) = serde_json::to_string_pretty(&pkg) {
+                    let _ = std::fs::write(&pkg_path, &output);
+                    eprintln!("[setup] patched engine package.json: added plugin-sdk/* wildcard export");
+                }
+            }
+        }
+    }
+
+    // Clean up staging directories from failed `openclaw plugins install` attempts
+    if let Ok(openclaw_home) = crate::config::get_user_openclaw_dir() {
+        let ext_dir = openclaw_home.join("extensions");
+        if ext_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&ext_dir) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.starts_with(".openclaw-install-stage") {
+                        eprintln!("[setup] cleaning up staging dir: {}", name);
+                        let _ = std::fs::remove_dir_all(entry.path());
+                    }
+                }
+            }
         }
     }
 }
