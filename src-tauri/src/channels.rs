@@ -467,87 +467,72 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
     let url_regex = regex_lite::Regex::new(r"https?://[^\s\x00-\x1f\u{2580}-\u{259F}]+").unwrap();
 
     // Source 1: Stream CLI output in real-time and search for QR URL.
-    // Critical: the CLI prints QR early then WAITS for scan. We can't use
-    // wait_with_output() because that blocks until timeout (60s+).
-    let cli_regex = qr_url_regex.clone();
+    // Critical: the CLI prints QR early then WAITS for scan. We must find
+    // the URL while the CLI is still running — not after it exits.
     let cli_url_regex = url_regex.clone();
     let cli_platform = platform.clone();
     let cli_app = app.clone();
-    let cli_handle = tokio::spawn(async move {
+
+    // Channel to signal URL found (or CLI exited with no URL)
+    let (url_tx, url_rx) = tokio::sync::oneshot::channel::<Option<String>>();
+
+    tokio::spawn(async move {
         use tokio::io::{AsyncBufReadExt, BufReader};
 
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
+        let mut url_tx = Some(url_tx); // Wrap in Option so we can take() once
 
-        let mut all_stdout = String::new();
-        let mut all_stderr = String::new();
-        let mut found_url: Option<String> = None;
-
-        // Read stdout and stderr concurrently
-        let stdout_reader = async {
-            let mut lines = Vec::new();
-            if let Some(out) = stdout {
-                let mut reader = BufReader::new(out).lines();
-                while let Ok(Some(line)) = reader.next_line().await {
-                    eprintln!("[binding] stdout: {}", &line);
-                    lines.push(line);
+        // Helper: check a line for URLs
+        let check_line_for_url = |line: &str, tx: &mut Option<tokio::sync::oneshot::Sender<Option<String>>>| {
+            // Search for any URL in the line
+            if let Some(mat) = cli_url_regex.find(line) {
+                let url = mat.as_str().to_string();
+                // Skip internal/localhost URLs and npm/github URLs
+                if !url.contains("127.0.0.1") && !url.contains("localhost")
+                    && !url.contains("npmjs.org") && !url.contains("registry.npm")
+                    && !url.contains("github.com")
+                {
+                    eprintln!("[binding] FOUND QR URL: {}", url);
+                    if let Some(sender) = tx.take() {
+                        let _ = sender.send(Some(url));
+                    }
                 }
             }
-            lines
         };
 
-        let stderr_reader = async {
-            let mut lines = Vec::new();
+        // Read stdout and stderr concurrently, checking each line
+        let stdout_task = {
+            let mut tx_ref = &mut url_tx;
+            async move {
+                if let Some(out) = stdout {
+                    let mut reader = BufReader::new(out).lines();
+                    while let Ok(Some(line)) = reader.next_line().await {
+                        eprintln!("[binding] stdout: {}", &line);
+                        check_line_for_url(&line, tx_ref);
+                    }
+                }
+            }
+        };
+
+        let stderr_task = async {
             if let Some(err) = stderr {
                 let mut reader = BufReader::new(err).lines();
                 while let Ok(Some(line)) = reader.next_line().await {
-                    eprintln!("[binding] stderr: {}", line.chars().take(200).collect::<String>());
-                    lines.push(line);
+                    // Don't log full provenance warnings (noisy)
+                    if !line.contains("provenance") {
+                        eprintln!("[binding] stderr: {}", line.chars().take(200).collect::<String>());
+                    }
                 }
             }
-            lines
         };
 
-        let (stdout_lines, stderr_lines) = tokio::join!(stdout_reader, stderr_reader);
-        for line in &stdout_lines { all_stdout.push_str(line); all_stdout.push('\n'); }
-        for line in &stderr_lines { all_stderr.push_str(line); all_stderr.push('\n'); }
+        tokio::join!(stdout_task, stderr_task);
 
-        let combined = format!("{}\n{}", all_stdout, all_stderr);
-
-        // Emit debug info
-        let _ = cli_app.emit("binding-progress", serde_json::json!({
-            "platform": cli_platform,
-            "stage": "cli_output",
-            "message": format!("stdout={} bytes, stderr={} bytes", all_stdout.len(), all_stderr.len()),
-        }));
-
-        // Search for QR URL with primary regex
-        if let Some(caps) = cli_regex.captures(&combined) {
-            if let Some(url_match) = caps.get(1) {
-                found_url = Some(url_match.as_str().to_string());
-            }
-        }
-
-        // Fallback: find any URL (broader — no domain filter)
-        if found_url.is_none() {
-            for mat in cli_url_regex.find_iter(&combined) {
-                let url = mat.as_str().to_string();
-                // Skip internal/localhost URLs and npm registry URLs
-                if url.contains("127.0.0.1") || url.contains("localhost")
-                    || url.contains("npmjs.org") || url.contains("registry.npm")
-                    || url.contains("github.com") { continue; }
-                eprintln!("[binding] found URL candidate: {}", url);
-                found_url = Some(url);
-                break;
-            }
-        }
-
-        if let Some(url) = found_url {
-            (Some(url), None)
-        } else {
-            // No URL found — report error with CLI output snippet
-            let snippet: String = all_stderr.chars().take(200).collect();
-            (None, Some(format!("CLI 无 QR URL: {}", snippet)))
+        // If we get here without finding a URL, signal failure
+        if let Some(sender) = url_tx.take() {
+            eprintln!("[binding] CLI exited without QR URL");
+            let _ = sender.send(None);
         }
     });
 
@@ -611,32 +596,27 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         }
     });
 
-    // Race: wait for either source to find the QR URL, with 120s overall timeout
+    // Race: wait for CLI streaming URL or log file URL, with 120s timeout
     let found_url: Option<String> = tokio::time::timeout(
         std::time::Duration::from_secs(120),
         async {
-            // Wait for CLI process first (it usually finishes faster)
-            let cli_result = cli_handle.await;
-            match cli_result {
-                Ok((Some(url), _)) => return Some(url),
-                Ok((None, Some(err))) => {
-                    // CLI failed with error — emit for diagnostics
-                    let _ = app.emit("binding-progress", serde_json::json!({
-                        "platform": platform,
-                        "stage": "cli_output",
-                        "message": err,
-                    }));
+            // Race: CLI streaming output vs gateway log file tailing
+            tokio::select! {
+                // Source 1: URL from CLI streaming (immediate when found)
+                cli_result = url_rx => {
+                    match cli_result {
+                        Ok(Some(url)) => return Some(url),
+                        _ => {}
+                    }
                 }
-                _ => {}
+                // Source 2: URL from gateway log file
+                log_result = log_handle => {
+                    if let Ok(Some(url)) = log_result {
+                        return Some(url);
+                    }
+                }
             }
-            // CLI didn't find URL — wait for log file (30s extra)
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(30),
-                log_handle,
-            ).await {
-                Ok(Ok(Some(url))) => Some(url),
-                _ => None,
-            }
+            None
         },
     ).await
     .unwrap_or(None);
