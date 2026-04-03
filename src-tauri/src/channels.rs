@@ -507,9 +507,28 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
                                 }
                             }
                         }
+                        // Forward key CLI progress messages to UI
+                        let progress_keywords = [
+                            "正在安装", "正在更新", "插件就绪", "正在启动",
+                            "Installing", "Resolving", "Packing", "Extracting",
+                            "Starting", "Plugin is already",
+                        ];
+                        for kw in &progress_keywords {
+                            if line.contains(kw) {
+                                // Clean up the message: remove prefix tags like [openclaw-weixin]
+                                let msg = line.trim_start_matches(|c: char| c == '[' || c.is_alphanumeric() || c == '-' || c == ']' || c == ' ');
+                                let display_msg = if msg.is_empty() { &line } else { msg };
+                                let _ = app_ref.emit("binding-progress", serde_json::json!({
+                                    "platform": *platform_ref,
+                                    "stage": "downloading",
+                                    "message": display_msg.chars().take(60).collect::<String>(),
+                                }));
+                                break;
+                            }
+                        }
 
                         // Detect connection success
-                        if line.contains("连接成功") {
+                        if line.contains("连接成功") || line.contains("连接成功") {
                             eprintln!("[binding] CONNECTION SUCCESS detected");
                             let _ = app_ref.emit("binding-progress", serde_json::json!({
                                 "platform": *platform_ref,
