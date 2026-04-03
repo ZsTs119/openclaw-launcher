@@ -286,12 +286,59 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
     });
 
     // Build PATH that includes:
+    // 0. Shim directory (intercepts `openclaw plugins install` for pre-installed plugins)
     // 1. Sandboxed node directory
     // 2. channel-cli's .bin directory
     // 3. Directory containing the `openclaw` binary (CLI tools need it for gateway discovery)
     // 4. System PATH
     let sandbox_path = {
         let mut paths = vec![];
+
+        // Create shim that intercepts `openclaw plugins install` to return success
+        // (plugin is already installed via npm at startup, but feishu CLI tries to reinstall)
+        let real_oc_dir = find_openclaw_bin_dir();
+        if let Ok(oc_home) = get_user_openclaw_dir() {
+            let shim_dir = oc_home.join(".shims");
+            let _ = std::fs::create_dir_all(&shim_dir);
+            #[cfg(target_os = "windows")]
+            {
+                let real_path = real_oc_dir.as_ref()
+                    .map(|d| d.join("openclaw.cmd").to_string_lossy().to_string())
+                    .unwrap_or_else(|| "openclaw.cmd".to_string());
+                let shim_content = format!(
+                    "@echo off\r\n\
+                    if \"%1\"==\"plugins\" if \"%2\"==\"install\" (\r\n\
+                        echo [shim] Plugin already pre-installed, skipping.\r\n\
+                        exit /b 0\r\n\
+                    )\r\n\
+                    \"{}\" %*\r\n",
+                    real_path
+                );
+                let _ = std::fs::write(shim_dir.join("openclaw.cmd"), &shim_content);
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                let real_path = real_oc_dir.as_ref()
+                    .map(|d| d.join("openclaw").to_string_lossy().to_string())
+                    .unwrap_or_else(|| "openclaw".to_string());
+                let shim_content = format!(
+                    "#!/bin/sh\n\
+                    if [ \"$1\" = \"plugins\" ] && [ \"$2\" = \"install\" ]; then\n\
+                        echo '[shim] Plugin already pre-installed, skipping.'\n\
+                        exit 0\n\
+                    fi\n\
+                    exec \"{}\" \"$@\"\n",
+                    real_path
+                );
+                let shim_path = shim_dir.join("openclaw");
+                let _ = std::fs::write(&shim_path, &shim_content);
+                #[allow(unused_imports)]
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&shim_path, std::fs::Permissions::from_mode(0o755));
+            }
+            paths.push(shim_dir); // Shim goes FIRST in PATH
+        }
+
         // Add sandboxed node directory
         if let Ok(node_bin) = crate::environment::get_node_binary() {
             if let Some(node_dir) = node_bin.parent() {
@@ -303,7 +350,7 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
             paths.push(dir.join("node_modules").join(".bin"));
         }
         // Find and add the directory containing the `openclaw` binary
-        if let Some(oc_dir) = find_openclaw_bin_dir() {
+        if let Some(oc_dir) = real_oc_dir {
             paths.push(oc_dir);
         }
         // Append system PATH
@@ -391,30 +438,12 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
                             eprintln!("[binding] wrote gateway.port={} to openclaw.json", gateway_port);
                         }
 
-                        // Inject plugin install records so CLIs recognize plugins as already installed.
-                        // Without this, the Feishu CLI tries to reinstall via `openclaw plugins install`
-                        // which fails with "npm install failed: package.json missing openclaw.hooks".
-                        let ext_dir = oc_dir.join("extensions");
-                        if cfg.get("plugins").is_none() {
-                            cfg["plugins"] = serde_json::json!({});
-                        }
+                        // Clean up any leftover "plugins.installed" key from previous launcher versions
+                        // (engine rejects this as "Unrecognized key")
                         if let Some(plugins) = cfg.get_mut("plugins").and_then(|v| v.as_object_mut()) {
-                            if !plugins.contains_key("installed") {
-                                plugins.insert("installed".to_string(), serde_json::json!({}));
-                            }
-                            if let Some(inst) = plugins.get_mut("installed").and_then(|v| v.as_object_mut()) {
-                                let pid = pdef.plugin_id.to_string();
-                                if !pid.is_empty() {
-                                    let plugin_path = ext_dir.join(pdef.plugin_id);
-                                    if plugin_path.exists() && !inst.contains_key(&pid) {
-                                        inst.insert(pid.clone(), serde_json::json!({
-                                            "path": plugin_path.to_string_lossy(),
-                                            "source": "launcher-preinstall",
-                                        }));
-                                        changed = true;
-                                        eprintln!("[binding] injected install record for: {}", pid);
-                                    }
-                                }
+                            if plugins.remove("installed").is_some() {
+                                changed = true;
+                                eprintln!("[binding] removed stale plugins.installed key");
                             }
                         }
 
