@@ -396,7 +396,7 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
     }
 
     // Spawn CLI process (triggers QR generation in the gateway)
-    let child = if let Some(js_path) = cli_js_entry {
+    let mut child = if let Some(js_path) = cli_js_entry {
         let _ = app.emit("binding-progress", serde_json::json!({
             "platform": platform,
             "stage": "starting",
@@ -463,60 +463,91 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
     //
     // We race both sources. Also capture CLI stderr for error reporting.
 
-    let qr_url_regex = regex_lite::Regex::new(r"二维码链接:\s*(https?://\S+)").unwrap();
-    let url_regex = regex_lite::Regex::new(r"https?://\S+").unwrap();
+    let qr_url_regex = regex_lite::Regex::new(r"(?:二维码链接|二维码|qr.?code.?url|scan.?url)[：:\s]*(https?://\S+)").unwrap();
+    let url_regex = regex_lite::Regex::new(r"https?://[^\s\x00-\x1f\u{2580}-\u{259F}]+").unwrap();
 
-    // Source 1: Wait for CLI process and scan its output
+    // Source 1: Stream CLI output in real-time and search for QR URL.
+    // Critical: the CLI prints QR early then WAITS for scan. We can't use
+    // wait_with_output() because that blocks until timeout (60s+).
     let cli_regex = qr_url_regex.clone();
     let cli_url_regex = url_regex.clone();
     let cli_platform = platform.clone();
     let cli_app = app.clone();
     let cli_handle = tokio::spawn(async move {
-        let output = child.wait_with_output().await;
-        match output {
-            Ok(out) => {
-                let stdout_str = String::from_utf8_lossy(&out.stdout);
-                let stderr_str = String::from_utf8_lossy(&out.stderr);
-                let combined = format!("{}\n{}", stdout_str, stderr_str);
+        use tokio::io::{AsyncBufReadExt, BufReader};
 
-                // Debug: log full CLI output for diagnostics
-                eprintln!("[binding] CLI exit code: {:?}", out.status.code());
-                eprintln!("[binding] CLI stdout ({} bytes): {}", stdout_str.len(), stdout_str.chars().take(500).collect::<String>());
-                eprintln!("[binding] CLI stderr ({} bytes): {}", stderr_str.len(), stderr_str.chars().take(500).collect::<String>());
+        let stdout = child.stdout.take();
+        let stderr = child.stderr.take();
 
-                // Emit full output for diagnostics
-                let _ = cli_app.emit("binding-progress", serde_json::json!({
-                    "platform": cli_platform,
-                    "stage": "cli_output",
-                    "message": format!("exit={:?} stdout={} stderr={}", 
-                        out.status.code(),
-                        stdout_str.chars().take(300).collect::<String>(),
-                        stderr_str.chars().take(300).collect::<String>()),
-                }));
+        let mut all_stdout = String::new();
+        let mut all_stderr = String::new();
+        let mut found_url: Option<String> = None;
 
-                // Search for QR URL in CLI output
-                if let Some(caps) = cli_regex.captures(&combined) {
-                    if let Some(url_match) = caps.get(1) {
-                        return (Some(url_match.as_str().to_string()), None);
-                    }
+        // Read stdout and stderr concurrently
+        let stdout_reader = async {
+            let mut lines = Vec::new();
+            if let Some(out) = stdout {
+                let mut reader = BufReader::new(out).lines();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    eprintln!("[binding] stdout: {}", &line);
+                    lines.push(line);
                 }
-                // Fallback: any URL in output
-                if let Some(mat) = cli_url_regex.find(&combined) {
-                    let url = mat.as_str().to_string();
-                    if url.contains("weixin.qq.com") || url.contains("feishu") || url.contains("lark") {
-                        return (Some(url), None);
-                    }
-                }
-
-                // CLI exited without QR URL — report error
-                let exit_code = out.status.code().unwrap_or(-1);
-                if !out.status.success() {
-                    let err_msg: String = stderr_str.chars().take(200).collect();
-                    return (None, Some(format!("CLI 退出码 {} : {}", exit_code, err_msg)));
-                }
-                (None, None)
             }
-            Err(e) => (None, Some(format!("CLI 进程异常: {}", e))),
+            lines
+        };
+
+        let stderr_reader = async {
+            let mut lines = Vec::new();
+            if let Some(err) = stderr {
+                let mut reader = BufReader::new(err).lines();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    eprintln!("[binding] stderr: {}", line.chars().take(200).collect::<String>());
+                    lines.push(line);
+                }
+            }
+            lines
+        };
+
+        let (stdout_lines, stderr_lines) = tokio::join!(stdout_reader, stderr_reader);
+        for line in &stdout_lines { all_stdout.push_str(line); all_stdout.push('\n'); }
+        for line in &stderr_lines { all_stderr.push_str(line); all_stderr.push('\n'); }
+
+        let combined = format!("{}\n{}", all_stdout, all_stderr);
+
+        // Emit debug info
+        let _ = cli_app.emit("binding-progress", serde_json::json!({
+            "platform": cli_platform,
+            "stage": "cli_output",
+            "message": format!("stdout={} bytes, stderr={} bytes", all_stdout.len(), all_stderr.len()),
+        }));
+
+        // Search for QR URL with primary regex
+        if let Some(caps) = cli_regex.captures(&combined) {
+            if let Some(url_match) = caps.get(1) {
+                found_url = Some(url_match.as_str().to_string());
+            }
+        }
+
+        // Fallback: find any URL (broader — no domain filter)
+        if found_url.is_none() {
+            for mat in cli_url_regex.find_iter(&combined) {
+                let url = mat.as_str().to_string();
+                // Skip internal/localhost URLs and npm registry URLs
+                if url.contains("127.0.0.1") || url.contains("localhost")
+                    || url.contains("npmjs.org") || url.contains("registry.npm")
+                    || url.contains("github.com") { continue; }
+                eprintln!("[binding] found URL candidate: {}", url);
+                found_url = Some(url);
+                break;
+            }
+        }
+
+        if let Some(url) = found_url {
+            (Some(url), None)
+        } else {
+            // No URL found — report error with CLI output snippet
+            let snippet: String = all_stderr.chars().take(200).collect();
+            (None, Some(format!("CLI 无 QR URL: {}", snippet)))
         }
     });
 
