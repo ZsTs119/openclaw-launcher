@@ -316,6 +316,36 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
     // Read the actual gateway port (may not be 18789 if port was in use)
     let gateway_port = crate::service::GATEWAY_PORT.load(std::sync::atomic::Ordering::SeqCst);
 
+    // Ensure openclaw.json has the correct gateway port so CLI tools can discover it.
+    // CLI tools read gateway.port from config (NOT from OPENCLAW_PORT env var).
+    if gateway_port > 0 {
+        if let Ok(oc_dir) = get_user_openclaw_dir() {
+            let config_path = oc_dir.join("openclaw.json");
+            if config_path.exists() {
+                if let Ok(raw) = std::fs::read_to_string(&config_path) {
+                    if let Ok(mut cfg) = serde_json::from_str::<serde_json::Value>(&raw) {
+                        let current_port = cfg
+                            .get("gateway")
+                            .and_then(|g| g.get("port"))
+                            .and_then(|p| p.as_u64())
+                            .unwrap_or(0) as u16;
+                        if current_port != gateway_port {
+                            if let Some(gw) = cfg.get_mut("gateway").and_then(|g| g.as_object_mut()) {
+                                gw.insert("port".to_string(), serde_json::json!(gateway_port));
+                            } else {
+                                cfg["gateway"] = serde_json::json!({"port": gateway_port});
+                            }
+                            if let Ok(out) = serde_json::to_string_pretty(&cfg) {
+                                let _ = std::fs::write(&config_path, &out);
+                                eprintln!("[binding] wrote gateway.port={} to openclaw.json", gateway_port);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Spawn CLI process (triggers QR generation in the gateway)
     let child = if let Some(js_path) = cli_js_entry {
         let _ = app.emit("binding-progress", serde_json::json!({
@@ -400,15 +430,20 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
                 let stderr_str = String::from_utf8_lossy(&out.stderr);
                 let combined = format!("{}\n{}", stdout_str, stderr_str);
 
-                // Emit stderr for diagnostics
-                if !stderr_str.is_empty() {
-                    let snippet: String = stderr_str.chars().take(300).collect();
-                    let _ = cli_app.emit("binding-progress", serde_json::json!({
-                        "platform": cli_platform,
-                        "stage": "cli_output",
-                        "message": format!("CLI: {}", snippet),
-                    }));
-                }
+                // Debug: log full CLI output for diagnostics
+                eprintln!("[binding] CLI exit code: {:?}", out.status.code());
+                eprintln!("[binding] CLI stdout ({} bytes): {}", stdout_str.len(), stdout_str.chars().take(500).collect::<String>());
+                eprintln!("[binding] CLI stderr ({} bytes): {}", stderr_str.len(), stderr_str.chars().take(500).collect::<String>());
+
+                // Emit full output for diagnostics
+                let _ = cli_app.emit("binding-progress", serde_json::json!({
+                    "platform": cli_platform,
+                    "stage": "cli_output",
+                    "message": format!("exit={:?} stdout={} stderr={}", 
+                        out.status.code(),
+                        stdout_str.chars().take(300).collect::<String>(),
+                        stderr_str.chars().take(300).collect::<String>()),
+                }));
 
                 // Search for QR URL in CLI output
                 if let Some(caps) = cli_regex.captures(&combined) {
