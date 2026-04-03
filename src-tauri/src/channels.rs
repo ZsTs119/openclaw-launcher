@@ -373,6 +373,9 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
             if config_path.exists() {
                 if let Ok(raw) = std::fs::read_to_string(&config_path) {
                     if let Ok(mut cfg) = serde_json::from_str::<serde_json::Value>(&raw) {
+                        let mut changed = false;
+
+                        // Sync gateway port
                         let current_port = cfg
                             .get("gateway")
                             .and_then(|g| g.get("port"))
@@ -384,9 +387,40 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
                             } else {
                                 cfg["gateway"] = serde_json::json!({"port": gateway_port});
                             }
+                            changed = true;
+                            eprintln!("[binding] wrote gateway.port={} to openclaw.json", gateway_port);
+                        }
+
+                        // Inject plugin install records so CLIs recognize plugins as already installed.
+                        // Without this, the Feishu CLI tries to reinstall via `openclaw plugins install`
+                        // which fails with "npm install failed: package.json missing openclaw.hooks".
+                        let ext_dir = oc_dir.join("extensions");
+                        if cfg.get("plugins").is_none() {
+                            cfg["plugins"] = serde_json::json!({});
+                        }
+                        if let Some(plugins) = cfg.get_mut("plugins").and_then(|v| v.as_object_mut()) {
+                            if !plugins.contains_key("installed") {
+                                plugins.insert("installed".to_string(), serde_json::json!({}));
+                            }
+                            if let Some(inst) = plugins.get_mut("installed").and_then(|v| v.as_object_mut()) {
+                                let pid = pdef.plugin_id.to_string();
+                                if !pid.is_empty() {
+                                    let plugin_path = ext_dir.join(pdef.plugin_id);
+                                    if plugin_path.exists() && !inst.contains_key(&pid) {
+                                        inst.insert(pid.clone(), serde_json::json!({
+                                            "path": plugin_path.to_string_lossy(),
+                                            "source": "launcher-preinstall",
+                                        }));
+                                        changed = true;
+                                        eprintln!("[binding] injected install record for: {}", pid);
+                                    }
+                                }
+                            }
+                        }
+
+                        if changed {
                             if let Ok(out) = serde_json::to_string_pretty(&cfg) {
                                 let _ = std::fs::write(&config_path, &out);
-                                eprintln!("[binding] wrote gateway.port={} to openclaw.json", gateway_port);
                             }
                         }
                     }
