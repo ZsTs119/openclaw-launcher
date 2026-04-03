@@ -16,9 +16,10 @@ use crate::paths;
 
 const OPENCLAW_REPO: &str = "openclaw/openclaw";
 
-/// Pinned OpenClaw version — includes plugin-sdk alias fix for channel-config-schema
-/// See: https://github.com/openclaw/openclaw/releases/tag/v2026.3.2
-const PINNED_VERSION: &str = "v2026.3.2";
+/// Pinned OpenClaw version — v2026.3.23 required for plugin-sdk subpath resolution.
+/// v2026.3.2 lacks compiled plugin-sdk subpaths (channel-config-schema, channel-status)
+/// and jiti ignores package.json exports, making patching impossible.
+const PINNED_VERSION: &str = "v2026.3.23";
 
 /// Quick URL reachability test (3 second timeout)
 pub async fn test_url_reachable(url: &str) -> bool {
