@@ -625,7 +625,7 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
 
     // Race: wait for CLI streaming URL or log file URL, with 120s timeout
     let found_url: Option<String> = tokio::time::timeout(
-        std::time::Duration::from_secs(120),
+        std::time::Duration::from_secs(300),
         async {
             // Race: CLI streaming output vs gateway log file tailing
             tokio::select! {
