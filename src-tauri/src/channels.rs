@@ -347,8 +347,9 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
                 }
                 #[cfg(windows)]
                 {
+                    use std::os::windows::process::CommandExt;
                     // Use mklink /J (junction) — doesn't require admin privileges
-                    let status = std::process::Command::new("cmd")
+                    let status: Result<std::process::ExitStatus, std::io::Error> = std::process::Command::new("cmd")
                         .args(["/C", "mklink", "/J",
                             &symlink_path.to_string_lossy(),
                             &engine_dir.to_string_lossy()])
