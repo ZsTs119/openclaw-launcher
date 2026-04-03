@@ -316,6 +316,54 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
     // Read the actual gateway port (may not be 18789 if port was in use)
     let gateway_port = crate::service::GATEWAY_PORT.load(std::sync::atomic::Ordering::SeqCst);
 
+    // Ensure ~/.openclaw/node_modules/openclaw symlink → engine directory.
+    // Extensions at ~/.openclaw/extensions/*/  do require("openclaw/plugin-sdk/...")
+    // Node.js walks up parent dirs looking for node_modules/openclaw.
+    // The CLI installer tries to create this but fails ("无法定位宿主 openclaw 包根目录").
+    // We create it ourselves so the CLI's `openclaw channels login` can load extensions.
+    if let Ok(oc_dir) = get_user_openclaw_dir() {
+        if let Ok(engine_dir) = crate::paths::get_openclaw_dir() {
+            let nm_dir = oc_dir.join("node_modules");
+            let symlink_path = nm_dir.join("openclaw");
+            // Only create if not already pointing to our engine
+            let needs_create = if symlink_path.exists() {
+                match std::fs::read_link(&symlink_path) {
+                    Ok(target) => target != engine_dir,
+                    Err(_) => false, // It's a real directory, don't touch
+                }
+            } else {
+                true
+            };
+            if needs_create {
+                let _ = std::fs::create_dir_all(&nm_dir);
+                let _ = std::fs::remove_file(&symlink_path); // Remove stale symlink
+                let _ = std::fs::remove_dir_all(&symlink_path); // Or stale dir
+                #[cfg(unix)]
+                {
+                    match std::os::unix::fs::symlink(&engine_dir, &symlink_path) {
+                        Ok(_) => eprintln!("[binding] created symlink: {:?} -> {:?}", symlink_path, engine_dir),
+                        Err(e) => eprintln!("[binding] symlink failed: {}", e),
+                    }
+                }
+                #[cfg(windows)]
+                {
+                    // Use mklink /J (junction) — doesn't require admin privileges
+                    let status = std::process::Command::new("cmd")
+                        .args(["/C", "mklink", "/J",
+                            &symlink_path.to_string_lossy(),
+                            &engine_dir.to_string_lossy()])
+                        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                        .status();
+                    match status {
+                        Ok(s) if s.success() => eprintln!("[binding] created junction: {:?} -> {:?}", symlink_path, engine_dir),
+                        Ok(s) => eprintln!("[binding] mklink /J failed with exit code {:?}", s.code()),
+                        Err(e) => eprintln!("[binding] mklink /J failed: {}", e),
+                    }
+                }
+            }
+        }
+    }
+
     // Ensure openclaw.json has the correct gateway port so CLI tools can discover it.
     // CLI tools read gateway.port from config (NOT from OPENCLAW_PORT env var).
     if gateway_port > 0 {
