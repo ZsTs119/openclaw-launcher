@@ -63,9 +63,30 @@ export function BindingModal({ platformId, platformName, onClose }: BindingModal
         } catch (err) {
             if (closedRef.current) return;
             const errStr = String(err);
+
+            // Auto-retry on network errors (max 2 retries)
+            const isNetworkError = errStr.includes("fetch failed")
+                || errStr.includes("ECONNRESET")
+                || errStr.includes("ETIMEDOUT")
+                || errStr.includes("安装失败");
+            const retryCount = (window as unknown as Record<string, number>).__bindingRetries || 0;
+
+            if (isNetworkError && retryCount < 2) {
+                (window as unknown as Record<string, number>).__bindingRetries = retryCount + 1;
+                setProgressMsg(`网络错误，正在重试 (${retryCount + 1}/2)...`);
+                setStage("preparing");
+                // Wait 2s then retry
+                await new Promise(r => setTimeout(r, 2000));
+                if (!closedRef.current) startBinding();
+                return;
+            }
+            (window as unknown as Record<string, number>).__bindingRetries = 0;
+
             // Friendly message for plugins.allow errors
             if (errStr.includes("plugins.allow") || errStr.includes("plugins")) {
                 setErrorMsg("插件权限未生效，请在仪表盘重启 OpenClaw 服务后重试");
+            } else if (isNetworkError) {
+                setErrorMsg("网络连接失败，请检查网络后重试");
             } else {
                 setErrorMsg(errStr);
             }
@@ -124,6 +145,14 @@ export function BindingModal({ platformId, platformName, onClose }: BindingModal
                         break;
                     case "qr_ready":
                         setStage("qr_ready");
+                        break;
+                    case "connected":
+                        // CLI detected "连接成功" — show success and auto-close
+                        setStage("success");
+                        stopPolling();
+                        setTimeout(() => {
+                            if (!closedRef.current) onClose();
+                        }, 2000);
                         break;
                     case "plugins_injected":
                         setProgressMsg("已自动配置插件权限");

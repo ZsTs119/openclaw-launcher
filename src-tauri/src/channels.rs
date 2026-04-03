@@ -483,33 +483,40 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
         let stderr = child.stderr.take();
         let mut url_tx = Some(url_tx); // Wrap in Option so we can take() once
 
-        // Helper: check a line for URLs
-        let check_line_for_url = |line: &str, tx: &mut Option<tokio::sync::oneshot::Sender<Option<String>>>| {
-            // Search for any URL in the line
-            if let Some(mat) = cli_url_regex.find(line) {
-                let url = mat.as_str().to_string();
-                // Skip internal/localhost URLs and npm/github URLs
-                if !url.contains("127.0.0.1") && !url.contains("localhost")
-                    && !url.contains("npmjs.org") && !url.contains("registry.npm")
-                    && !url.contains("github.com")
-                {
-                    eprintln!("[binding] FOUND QR URL: {}", url);
-                    if let Some(sender) = tx.take() {
-                        let _ = sender.send(Some(url));
-                    }
-                }
-            }
-        };
-
         // Read stdout and stderr concurrently, checking each line
         let stdout_task = {
-            let mut tx_ref = &mut url_tx;
+            let tx_ref = &mut url_tx;
+            let app_ref = &cli_app;
+            let platform_ref = &cli_platform;
             async move {
                 if let Some(out) = stdout {
                     let mut reader = BufReader::new(out).lines();
                     while let Ok(Some(line)) = reader.next_line().await {
                         eprintln!("[binding] stdout: {}", &line);
-                        check_line_for_url(&line, tx_ref);
+
+                        // Check for QR URL in this line
+                        if let Some(mat) = cli_url_regex.find(&line) {
+                            let url = mat.as_str().to_string();
+                            if !url.contains("127.0.0.1") && !url.contains("localhost")
+                                && !url.contains("npmjs.org") && !url.contains("registry.npm")
+                                && !url.contains("github.com")
+                            {
+                                eprintln!("[binding] FOUND QR URL: {}", url);
+                                if let Some(sender) = tx_ref.take() {
+                                    let _ = sender.send(Some(url));
+                                }
+                            }
+                        }
+
+                        // Detect connection success
+                        if line.contains("连接成功") {
+                            eprintln!("[binding] CONNECTION SUCCESS detected");
+                            let _ = app_ref.emit("binding-progress", serde_json::json!({
+                                "platform": *platform_ref,
+                                "stage": "connected",
+                                "message": "绑定成功",
+                            }));
+                        }
                     }
                 }
             }
@@ -519,10 +526,11 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
             if let Some(err) = stderr {
                 let mut reader = BufReader::new(err).lines();
                 while let Ok(Some(line)) = reader.next_line().await {
-                    // Don't log full provenance warnings (noisy)
-                    if !line.contains("provenance") {
-                        eprintln!("[binding] stderr: {}", line.chars().take(200).collect::<String>());
+                    // Skip noisy provenance warnings and known Windows SIGUSR1 errors
+                    if line.contains("provenance") || line.contains("SIGUSR1") {
+                        continue;
                     }
+                    eprintln!("[binding] stderr: {}", line.chars().take(200).collect::<String>());
                 }
             }
         };
