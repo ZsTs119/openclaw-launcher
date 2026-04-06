@@ -400,7 +400,7 @@ try {{
             {
                 let cmd_wrapper = format!(
                     "@echo off\r\n\"{node}\" \"{js}\" %*\r\n",
-                    node = node_bin.to_string_lossy(),
+                    node = node_bin,
                     js = js_path_str,
                 );
                 let _ = std::fs::write(shim_dir.join("openclaw.cmd"), &cmd_wrapper);
@@ -409,7 +409,7 @@ try {{
             {
                 let sh_wrapper = format!(
                     "#!/bin/sh\nexec \"{}\" \"{}\" \"$@\"\n",
-                    node_bin.to_string_lossy(),
+                    node_bin,
                     js_path_str,
                 );
                 let sh_path = shim_dir.join("openclaw");
