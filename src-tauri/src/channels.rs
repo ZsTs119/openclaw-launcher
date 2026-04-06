@@ -294,48 +294,131 @@ pub async fn start_channel_binding(app: tauri::AppHandle, platform: String) -> R
     let sandbox_path = {
         let mut paths = vec![];
 
-        // Create shim that intercepts `openclaw plugins install` to return success
-        // (plugin is already installed via npm at startup, but feishu CLI tries to reinstall)
+        // Create Node.js shim that intercepts `openclaw plugins install <tgz>`
+        // and performs the installation correctly (extract + npm install),
+        // bypassing the engine's broken `plugins install` command.
+        // The feishu CLI calls `openclaw plugins install <path>` which fails because
+        // the engine v2026.3.23 can't handle the plugin format. This shim does
+        // the extraction and npm install itself, then returns success.
         let real_oc_dir = find_openclaw_bin_dir();
         if let Ok(oc_home) = get_user_openclaw_dir() {
             let shim_dir = oc_home.join(".shims");
             let _ = std::fs::create_dir_all(&shim_dir);
+
+            // Determine the real openclaw binary path
+            let real_bin = {
+                #[cfg(target_os = "windows")]
+                {
+                    real_oc_dir.as_ref()
+                        .map(|d| d.join("openclaw.cmd").to_string_lossy().to_string())
+                        .unwrap_or_else(|| "openclaw.cmd".to_string())
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    real_oc_dir.as_ref()
+                        .map(|d| d.join("openclaw").to_string_lossy().to_string())
+                        .unwrap_or_else(|| "openclaw".to_string())
+                }
+            };
+            let ext_dir = oc_home.join("extensions").to_string_lossy().to_string();
+
+            // Write the Node.js shim script
+            let js_shim = format!(
+                r#"#!/usr/bin/env node
+"use strict";
+const {{ execSync, execFileSync }} = require("child_process");
+const path = require("path");
+const fs = require("fs");
+const os = require("os");
+const args = process.argv.slice(2);
+const REAL_BIN = {real_bin};
+const EXT_DIR = {ext_dir};
+
+// Intercept: openclaw plugins install <path>
+if (args[0] === "plugins" && args[1] === "install" && args[2]) {{
+  const src = args[2];
+  // Determine plugin name from the tgz or directory
+  let pluginName = "openclaw-lark";
+  const m = path.basename(src).match(/^(?:larksuite-)?([a-z0-9-]+?)[-_]?\d/i);
+  if (m) pluginName = m[1];
+  const dest = path.join(EXT_DIR, pluginName);
+  try {{
+    // Extract tgz if it's a tarball
+    if (src.endsWith(".tgz") || src.endsWith(".tar.gz")) {{
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-plugin-"));
+      const extractDir = path.join(tmp, "extract");
+      fs.mkdirSync(extractDir, {{ recursive: true }});
+      execSync(`tar -xzf "${{src}}" -C "${{extractDir}}"`, {{ stdio: "pipe" }});
+      // npm pack puts files in package/ subdirectory
+      const pkgDir = path.join(extractDir, "package");
+      const srcDir = fs.existsSync(pkgDir) ? pkgDir : extractDir;
+      // Copy to extensions directory
+      if (fs.existsSync(dest)) fs.rmSync(dest, {{ recursive: true, force: true }});
+      fs.cpSync(srcDir, dest, {{ recursive: true }});
+      fs.rmSync(tmp, {{ recursive: true, force: true }});
+    }} else if (fs.existsSync(src) && fs.statSync(src).isDirectory()) {{
+      if (fs.existsSync(dest)) fs.rmSync(dest, {{ recursive: true, force: true }});
+      fs.cpSync(src, dest, {{ recursive: true }});
+    }}
+    // Run npm install in the extension directory
+    if (fs.existsSync(path.join(dest, "package.json"))) {{
+      console.log("[shim] Installing dependencies for " + pluginName + "...");
+      execSync("npm install --production --no-optional", {{
+        cwd: dest,
+        stdio: "inherit",
+        timeout: 120000,
+      }});
+    }}
+    console.log("[shim] Plugin " + pluginName + " installed successfully.");
+    process.exit(0);
+  }} catch (e) {{
+    console.error("[shim] Plugin install failed:", e.message);
+    process.exit(1);
+  }}
+}}
+
+// Forward all other commands to the real openclaw binary
+try {{
+  const result = execFileSync(REAL_BIN, args, {{
+    stdio: "inherit",
+    windowsHide: true,
+  }});
+  process.exit(0);
+}} catch (e) {{
+  process.exit(e.status || 1);
+}}
+"#,
+                real_bin = serde_json::to_string(&real_bin).unwrap_or_else(|_| format!("\"{}\"", real_bin)),
+                ext_dir = serde_json::to_string(&ext_dir).unwrap_or_else(|_| format!("\"{}\"", ext_dir)),
+            );
+            let js_path = shim_dir.join("openclaw-shim.js");
+            let _ = std::fs::write(&js_path, &js_shim);
+            let js_path_str = js_path.to_string_lossy();
+
+            // Write platform-specific wrappers that call the JS shim via node
             #[cfg(target_os = "windows")]
             {
-                let real_path = real_oc_dir.as_ref()
-                    .map(|d| d.join("openclaw.cmd").to_string_lossy().to_string())
-                    .unwrap_or_else(|| "openclaw.cmd".to_string());
-                let shim_content = format!(
-                    "@echo off\r\n\
-                    if \"%1\"==\"plugins\" if \"%2\"==\"install\" (\r\n\
-                        echo [shim] Plugin already pre-installed, skipping.\r\n\
-                        exit /b 0\r\n\
-                    )\r\n\
-                    \"{}\" %*\r\n",
-                    real_path
+                let cmd_wrapper = format!(
+                    "@echo off\r\n\"{node}\" \"{js}\" %*\r\n",
+                    node = node_bin.to_string_lossy(),
+                    js = js_path_str,
                 );
-                let _ = std::fs::write(shim_dir.join("openclaw.cmd"), &shim_content);
+                let _ = std::fs::write(shim_dir.join("openclaw.cmd"), &cmd_wrapper);
             }
             #[cfg(not(target_os = "windows"))]
             {
-                let real_path = real_oc_dir.as_ref()
-                    .map(|d| d.join("openclaw").to_string_lossy().to_string())
-                    .unwrap_or_else(|| "openclaw".to_string());
-                let shim_content = format!(
-                    "#!/bin/sh\n\
-                    if [ \"$1\" = \"plugins\" ] && [ \"$2\" = \"install\" ]; then\n\
-                        echo '[shim] Plugin already pre-installed, skipping.'\n\
-                        exit 0\n\
-                    fi\n\
-                    exec \"{}\" \"$@\"\n",
-                    real_path
+                let sh_wrapper = format!(
+                    "#!/bin/sh\nexec \"{}\" \"{}\" \"$@\"\n",
+                    node_bin.to_string_lossy(),
+                    js_path_str,
                 );
-                let shim_path = shim_dir.join("openclaw");
-                let _ = std::fs::write(&shim_path, &shim_content);
+                let sh_path = shim_dir.join("openclaw");
+                let _ = std::fs::write(&sh_path, &sh_wrapper);
                 #[allow(unused_imports)]
                 use std::os::unix::fs::PermissionsExt;
-                let _ = std::fs::set_permissions(&shim_path, std::fs::Permissions::from_mode(0o755));
+                let _ = std::fs::set_permissions(&sh_path, std::fs::Permissions::from_mode(0o755));
             }
+            eprintln!("[binding] shim installed at {:?}", shim_dir);
             paths.push(shim_dir); // Shim goes FIRST in PATH
         }
 
