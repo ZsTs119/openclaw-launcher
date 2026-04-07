@@ -379,11 +379,12 @@ if (args[0] === "plugins" && args[1] === "install" && args[2]) {{
 
 // Forward all other commands to the real openclaw binary
 try {{
-  const result = execFileSync(REAL_BIN, args, {{
+  const r = require("child_process").spawnSync(REAL_BIN, args, {{
     stdio: "inherit",
     windowsHide: true,
+    shell: true,
   }});
-  process.exit(0);
+  process.exit(r.status || 0);
 }} catch (e) {{
   process.exit(e.status || 1);
 }}
