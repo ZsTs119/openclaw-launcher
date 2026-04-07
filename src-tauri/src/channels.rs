@@ -550,10 +550,12 @@ try {{
             "message": "正在启动绑定...",
         }));
         // Run the JS entry directly with sandboxed node (bypasses .cmd/.sh wrappers)
+        eprintln!("[binding] PATH[0..3]: {:?}", sandbox_path.to_string_lossy().split(if cfg!(windows) { ';' } else { ':' }).take(3).collect::<Vec<_>>());
         let mut cmd = tokio::process::Command::new(&node_bin);
         cmd.arg(js_path.to_string_lossy().to_string())
             .arg("install")
             .env("PATH", &sandbox_path)
+            .env("Path", &sandbox_path) // Windows uses "Path" not "PATH"
             .env("OPENCLAW_PORT", gateway_port.to_string())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -579,6 +581,7 @@ try {{
         let mut cmd = tokio::process::Command::new(npx_cmd);
         cmd.args(&args)
             .env("PATH", &sandbox_path)
+            .env("Path", &sandbox_path) // Windows uses "Path" not "PATH"
             .env("OPENCLAW_PORT", gateway_port.to_string())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
