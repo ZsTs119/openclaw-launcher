@@ -386,9 +386,23 @@ if (args[0] === "plugins" && args[1] === "install" && args[2]) {{
     }}
     if (fs.existsSync(path.join(dest, "package.json"))) {{
       console.log("[shim] Installing dependencies for " + pluginName + "...");
-      execSync("npm install --omit=dev --no-optional", {{
-        cwd: dest, stdio: "inherit", timeout: 600000,
-      }});
+      const npmCmd = "npm install --omit=dev --no-optional --registry=https://registry.npmmirror.com";
+      let lastErr;
+      for (let attempt = 1; attempt <= 3; attempt++) {{
+        try {{
+          execSync(npmCmd, {{ cwd: dest, stdio: "inherit" }});
+          lastErr = null;
+          break;
+        }} catch (e) {{
+          lastErr = e;
+          console.error("[shim] npm install attempt " + attempt + "/3 failed: " + (e.message || e));
+          if (attempt < 3) {{
+            console.log("[shim] Retrying in 5 seconds...");
+            execSync(os.platform() === "win32" ? "timeout /t 5 /nobreak >nul" : "sleep 5");
+          }}
+        }}
+      }}
+      if (lastErr) throw lastErr;
     }}
     console.log("[shim] Plugin " + pluginName + " installed successfully.");
     process.exit(0);
