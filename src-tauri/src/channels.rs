@@ -386,8 +386,8 @@ if (args[0] === "plugins" && args[1] === "install" && args[2]) {{
     }}
     if (fs.existsSync(path.join(dest, "package.json"))) {{
       console.log("[shim] Installing dependencies for " + pluginName + "...");
-      execSync("npm install --production --no-optional", {{
-        cwd: dest, stdio: "inherit", timeout: 120000,
+      execSync("npm install --omit=dev --no-optional", {{
+        cwd: dest, stdio: "inherit", timeout: 600000,
       }});
     }}
     console.log("[shim] Plugin " + pluginName + " installed successfully.");
