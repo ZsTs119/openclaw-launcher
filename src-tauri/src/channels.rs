@@ -63,7 +63,7 @@ const PLATFORMS: &[PlatformDef] = &[
     PlatformDef {
         id: "feishu",
         name: "飞书",
-        install_cmd: "@larksuite/openclaw-lark install",
+        install_cmd: "@larksuite/openclaw-lark install --verbose",
         config_key: "openclaw-lark",
         plugin_id: "openclaw-lark",
         npm_package: "@larksuite/openclaw-lark",
