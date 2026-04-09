@@ -583,6 +583,22 @@ try {{
         }
     }
 
+    // Move existing plugin directory out of the way before spawning CLI.
+    // The gateway may have native .node files locked (EPERM on delete).
+    // Rename is atomic on Windows even with locked files — the CLI will
+    // see no plugin and take the fresh install path through our shim.
+    if let Ok(oc_home) = get_user_openclaw_dir() {
+        let ext_dir = oc_home.join("extensions").join(pdef.plugin_id);
+        if ext_dir.exists() {
+            let backup = oc_home.join("extensions").join(format!("{}.old", pdef.plugin_id));
+            let _ = std::fs::remove_dir_all(&backup); // clean previous backup
+            match std::fs::rename(&ext_dir, &backup) {
+                Ok(_) => eprintln!("[binding] moved plugin dir to {:?} (avoid file lock)", backup),
+                Err(e) => eprintln!("[binding] WARN: could not rename plugin dir: {}", e),
+            }
+        }
+    }
+
     // Spawn CLI process (triggers QR generation in the gateway)
     let mut child = if let Some(js_path) = cli_js_entry {
         let _ = app.emit("binding-progress", serde_json::json!({
