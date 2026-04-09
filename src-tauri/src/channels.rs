@@ -331,28 +331,52 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const args = process.argv.slice(2);
-const REAL_BIN = {real_bin};
+const REAL_BIN_HINT = {real_bin};
 const EXT_DIR = {ext_dir};
+const SHIM_DIR = path.dirname(process.argv[1]);
+
+// Recursion guard: prevent infinite loop when shim calls itself
+if (process.env.OPENCLAW_SHIM === "1") {{
+  console.error("[shim] recursion detected, forwarding to real binary");
+  process.exit(127);
+}}
+process.env.OPENCLAW_SHIM = "1";
+
+// Find the real openclaw binary by searching PATH, skipping our shim dir
+function findRealBin() {{
+  // 1. Try the hint path (from find_openclaw_bin_dir)
+  if (REAL_BIN_HINT && REAL_BIN_HINT !== "openclaw.cmd" && REAL_BIN_HINT !== "openclaw") {{
+    if (fs.existsSync(REAL_BIN_HINT)) return REAL_BIN_HINT;
+  }}
+  // 2. Search PATH for openclaw, skipping .shims directory
+  const sep = os.platform() === "win32" ? ";" : ":";
+  const exts = os.platform() === "win32" ? [".cmd", ".exe", ""] : [""];
+  const dirs = (process.env.PATH || process.env.Path || "").split(sep);
+  for (const dir of dirs) {{
+    if (!dir || path.resolve(dir) === path.resolve(SHIM_DIR)) continue;
+    for (const ext of exts) {{
+      const p = path.join(dir, "openclaw" + ext);
+      try {{ if (fs.existsSync(p)) return p; }} catch {{}}
+    }}
+  }}
+  return null;
+}}
 
 // Intercept: openclaw plugins install <path>
 if (args[0] === "plugins" && args[1] === "install" && args[2]) {{
   const src = args[2];
-  // Determine plugin name from the tgz or directory
   let pluginName = "openclaw-lark";
   const m = path.basename(src).match(/^(?:larksuite-)?([a-z0-9-]+?)[-_]?\d/i);
   if (m) pluginName = m[1];
   const dest = path.join(EXT_DIR, pluginName);
   try {{
-    // Extract tgz if it's a tarball
     if (src.endsWith(".tgz") || src.endsWith(".tar.gz")) {{
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-plugin-"));
       const extractDir = path.join(tmp, "extract");
       fs.mkdirSync(extractDir, {{ recursive: true }});
       execSync(`tar -xzf "${{src}}" -C "${{extractDir}}"`, {{ stdio: "pipe" }});
-      // npm pack puts files in package/ subdirectory
       const pkgDir = path.join(extractDir, "package");
       const srcDir = fs.existsSync(pkgDir) ? pkgDir : extractDir;
-      // Copy to extensions directory
       if (fs.existsSync(dest)) fs.rmSync(dest, {{ recursive: true, force: true }});
       fs.cpSync(srcDir, dest, {{ recursive: true }});
       fs.rmSync(tmp, {{ recursive: true, force: true }});
@@ -360,13 +384,10 @@ if (args[0] === "plugins" && args[1] === "install" && args[2]) {{
       if (fs.existsSync(dest)) fs.rmSync(dest, {{ recursive: true, force: true }});
       fs.cpSync(src, dest, {{ recursive: true }});
     }}
-    // Run npm install in the extension directory
     if (fs.existsSync(path.join(dest, "package.json"))) {{
       console.log("[shim] Installing dependencies for " + pluginName + "...");
       execSync("npm install --production --no-optional", {{
-        cwd: dest,
-        stdio: "inherit",
-        timeout: 120000,
+        cwd: dest, stdio: "inherit", timeout: 120000,
       }});
     }}
     console.log("[shim] Plugin " + pluginName + " installed successfully.");
@@ -378,8 +399,14 @@ if (args[0] === "plugins" && args[1] === "install" && args[2]) {{
 }}
 
 // Forward all other commands to the real openclaw binary
+const realBin = findRealBin();
+if (!realBin) {{
+  console.error("[shim] ERROR: Could not find real openclaw binary in PATH");
+  process.exit(127);
+}}
+console.error("[shim] forwarding to: " + realBin);
 try {{
-  const r = require("child_process").spawnSync(REAL_BIN, args, {{
+  const r = require("child_process").spawnSync(realBin, args, {{
     stdio: "inherit",
     windowsHide: true,
     shell: true,
