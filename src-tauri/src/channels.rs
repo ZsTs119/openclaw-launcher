@@ -6,7 +6,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::Mutex;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 use crate::config::get_user_openclaw_dir;
 
@@ -584,19 +584,45 @@ try {{
     }
 
     // Move existing plugin directory out of the way before spawning CLI.
-    // The gateway may have native .node files locked (EPERM on delete).
-    // Rename is atomic on Windows even with locked files — the CLI will
-    // see no plugin and take the fresh install path through our shim.
+    // The gateway may have native .node files locked (EPERM/EBUSY on Windows).
+    // We must STOP the gateway first to release all file handles, then remove
+    // the plugin directory. The CLI will see no plugin → fresh install via shim.
+    // The feishu CLI itself restarts the gateway after binding (verifyAndStart).
+    let gateway_was_running;
     if let Ok(oc_home) = get_user_openclaw_dir() {
         let ext_dir = oc_home.join("extensions").join(pdef.plugin_id);
         if ext_dir.exists() {
-            let backup = oc_home.join("extensions").join(format!("{}.old", pdef.plugin_id));
-            let _ = std::fs::remove_dir_all(&backup); // clean previous backup
-            match std::fs::rename(&ext_dir, &backup) {
-                Ok(_) => eprintln!("[binding] moved plugin dir to {:?} (avoid file lock)", backup),
-                Err(e) => eprintln!("[binding] WARN: could not rename plugin dir: {}", e),
+            // Stop gateway to release file locks on native .node addons
+            let state = app.state::<crate::service::ServiceState>();
+            let mut guard = state.child.lock().unwrap();
+            gateway_was_running = guard.is_some();
+            if let Some(mut child) = guard.take() {
+                eprintln!("[binding] stopping gateway to release file locks");
+                let _ = child.kill();
+                let _ = child.wait();
+                // Give OS time to release file handles
+                std::thread::sleep(std::time::Duration::from_millis(500));
             }
+            drop(guard);
+
+            // Now remove the plugin directory (handles should be released)
+            match std::fs::remove_dir_all(&ext_dir) {
+                Ok(_) => eprintln!("[binding] removed plugin dir {:?}", ext_dir),
+                Err(e) => {
+                    eprintln!("[binding] WARN: could not remove plugin dir: {}", e);
+                    // Try rename as fallback
+                    let backup = oc_home.join("extensions").join(format!("{}.old", pdef.plugin_id));
+                    let _ = std::fs::remove_dir_all(&backup);
+                    if let Ok(()) = std::fs::rename(&ext_dir, &backup) {
+                        eprintln!("[binding] renamed plugin dir to {:?}", backup);
+                    }
+                }
+            }
+        } else {
+            gateway_was_running = false;
         }
+    } else {
+        gateway_was_running = false;
     }
 
     // Spawn CLI process (triggers QR generation in the gateway)
